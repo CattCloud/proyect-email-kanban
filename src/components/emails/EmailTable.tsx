@@ -6,6 +6,7 @@ import { ChevronDown, ChevronUp, Upload, Sparkles } from "lucide-react";
 import SearchBar from "@/components/shared/SearchBar";
 import EmptyState from "@/components/shared/EmptyState";
 import { mockEmails, type EmailMock } from "@/lib/mock-data/emails";
+import Button from "@/components/ui/button";
 
 /**
  * HU-UI-002: Listado de Emails con Tabla Interactiva
@@ -138,29 +139,27 @@ export default function EmailTable() {
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h1>Mis Emails</h1>
         <div className="flex items-center gap-2">
-          <button
+          <Button
             type="button"
             onClick={onImport}
-            className="flex items-center gap-2 px-3 py-2 rounded-md border border-[color:var(--color-border-light)] hover:bg-[color:var(--color-bg-hover)] transition-colors focus-ring"
             aria-label="Importar JSON"
+            variant="outline"
+            size="md"
+            leftIcon={<Upload className="w-4 h-4" aria-hidden />}
           >
-            <Upload className="w-4 h-4" aria-hidden />
-            <span>Importar JSON</span>
-          </button>
-          <button
+            Importar JSON
+          </Button>
+          <Button
             type="button"
             onClick={onProcessAI}
             disabled={selectedCount === 0}
-            className={`flex items-center gap-2 px-3 py-2 rounded-md border transition-colors focus-ring ${
-              selectedCount > 0
-                ? "border-[color:var(--color-border-focus)] hover:bg-[color:var(--color-bg-hover)]"
-                : "border-[color:var(--color-border-light)] opacity-[var(--opacity-disabled)] cursor-not-allowed"
-            }`}
             aria-label="Procesar con IA"
+            variant="primary"
+            size="md"
+            leftIcon={<Sparkles className="w-4 h-4" aria-hidden />}
           >
-            <Sparkles className="w-4 h-4" aria-hidden />
-            <span>Procesar con IA{selectedCount ? ` (${selectedCount})` : ""}</span>
-          </button>
+            Procesar con IA{selectedCount ? ` (${selectedCount})` : ""}
+          </Button>
         </div>
       </div>
 
@@ -328,25 +327,27 @@ export default function EmailTable() {
                 Mostrando {total === 0 ? 0 : startIdx + 1}-{endIdx} de {total} emails
               </div>
               <div className="flex items-center gap-2">
-                <button
+                <Button
                   type="button"
-                  className="px-2 py-1 rounded border border-[color:var(--color-border-light)] hover:bg-[color:var(--color-bg-hover)]"
+                  variant="outline"
+                  size="sm"
                   onClick={() => setPage(p => Math.max(1, p - 1))}
                   disabled={page <= 1}
                   aria-label="Página anterior"
                 >
                   Anterior
-                </button>
+                </Button>
                 <span>Página {page} de {totalPages}</span>
-                <button
+                <Button
                   type="button"
-                  className="px-2 py-1 rounded border border-[color:var(--color-border-light)] hover:bg-[color:var(--color-bg-hover)]"
+                  variant="outline"
+                  size="sm"
                   onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                   disabled={page >= totalPages}
                   aria-label="Página siguiente"
                 >
                   Siguiente
-                </button>
+                </Button>
               </div>
             </div>
           </>

@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { Mail, Clock, CheckSquare, BarChart2, ArrowRight, RefreshCw } from "lucide-react";
 import MetricCard from "@/components/dashboard/MetricCard";
 import { mockEmails, getRecentEmails } from "@/lib/mock-data/emails";
+import Button from "@/components/ui/button";
 
 /**
  * HU-UI-005: Dashboard Principal
@@ -71,24 +72,17 @@ export default function DashboardPage() {
             })}
           </span>
         </div>
-        <button
+        <Button
           type="button"
           onClick={handleRefresh}
-          className="flex items-center gap-2 px-3 py-2 rounded-md border border-[color:var(--color-border-light)] hover:bg-[color:var(--color-bg-hover)] transition-colors focus-ring"
           aria-label="Refrescar métricas"
+          variant="outline"
+          size="md"
+          loading={refreshing}
+          leftIcon={!refreshing ? <RefreshCw className="w-4 h-4" aria-hidden /> : undefined}
         >
-          {!refreshing ? (
-            <>
-              <RefreshCw className="w-4 h-4" aria-hidden />
-              <span>Refrescar</span>
-            </>
-          ) : (
-            <span className="flex items-center gap-2">
-              <span className="spinner" aria-hidden />
-              Actualizando...
-            </span>
-          )}
-        </button>
+          {refreshing ? "Actualizando..." : "Refrescar"}
+        </Button>
       </div>
 
       {/* Grid métricas */}
@@ -163,11 +157,10 @@ export default function DashboardPage() {
           <ArrowRight className="w-5 h-5 text-[color:var(--color-primary-500)]" aria-hidden />
         </Link>
 
-        <button
-          type="button"
-          onClick={() => alert("Funcionalidad disponible en Semana 2")}
-          className="card-clickable p-6 flex items-center justify-between text-left"
-          aria-label="Importar Emails"
+        <Link
+          href="/kanban"
+          className="card-clickable p-6 flex items-center justify-between"
+          aria-label="Ir al Kanban"
         >
           <div>
             <div className="text-sm text-[color:var(--color-text-muted)] mb-1 uppercase tracking-wide">
@@ -179,7 +172,9 @@ export default function DashboardPage() {
             </div>
           </div>
           <ArrowRight className="w-5 h-5 text-[color:var(--color-primary-500)]" aria-hidden />
-        </button>
+        </Link>
+
+
       </section>
 
       {/* Emails recientes */}

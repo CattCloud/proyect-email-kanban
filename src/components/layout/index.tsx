@@ -16,6 +16,7 @@ import {
   User as UserIcon,
   LogOut as LogOutIcon,
 } from "lucide-react";
+import Button from "@/components/ui/button";
 
 /**
  * Utilidades
@@ -140,17 +141,17 @@ export function Sidebar({
 
       {/* Botón colapsar */}
       <div className="mt-auto p-2">
-        <button
+        <Button
           type="button"
           onClick={onToggle}
-          className={cn(
-            "w-full flex items-center justify-center gap-2 py-2 rounded-md text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[color:var(--color-bg-hover)] transition-colors"
-          )}
           aria-label={collapsed ? "Expandir sidebar" : "Colapsar sidebar"}
+          variant="ghost"
+          size={collapsed ? "icon" : "sm"}
+          className="w-full"
+          leftIcon={<Lucide name={collapsed ? "ChevronRight" : "ChevronLeft"} />}
         >
-          <Lucide name={collapsed ? "ChevronRight" : "ChevronLeft"} />
-          {!collapsed && <span className="text-xs">Colapsar</span>}
-        </button>
+          {collapsed ? <span className="sr-only">Expandir sidebar</span> : "Colapsar"}
+        </Button>
       </div>
     </aside>
   );
@@ -193,14 +194,16 @@ export function MobileSidebar({
               Email Kanban
             </h2>
           </div>
-          <button
+          <Button
             type="button"
             onClick={onClose}
             aria-label="Cerrar menú"
-            className="p-2 rounded-md hover:bg-[color:var(--color-bg-hover)]"
+            variant="ghost"
+            size="icon"
+            leftIcon={<Lucide name="X" />}
           >
-            <Lucide name="X" />
-          </button>
+            Cerrar menú
+          </Button>
         </div>
 
         <nav className="px-3 py-3">
@@ -296,27 +299,31 @@ function UserMenu() {
 
   return (
     <div className="relative">
-      <button
+      <Button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-[color:var(--color-bg-hover)] focus-ring"
+        variant="ghost"
+        size="sm"
+        className="px-2 py-1"
         aria-haspopup="menu"
         aria-expanded={open}
+        leftIcon={
+          <div
+            className="flex items-center justify-center rounded-full bg-[color:var(--color-primary-100)]"
+            style={{ width: "32px", height: "32px" }}
+            aria-hidden
+          >
+            <UserIcon className="w-4 h-4 text-[color:var(--color-primary-700)]" />
+          </div>
+        }
       >
-        <div
-          className="flex items-center justify-center rounded-full bg-[color:var(--color-primary-100)]"
-          style={{ width: "32px", height: "32px" }}
-          aria-hidden
-        >
-          <UserIcon className="w-4 h-4 text-[color:var(--color-primary-700)]" />
-        </div>
         <span className="text-sm hide-mobile">{mockUser.name}</span>
-      </button>
+      </Button>
 
       {/* Dropdown */}
       <div
         className={cn(
-          "absolute right-0 mt-2 w-48 rounded-md border border-[color:var(--color-border-light)] bg-[color:var(--color-bg-card)] shadow-xl",
+          "absolute z-50 right-0 mt-2 w-48 rounded-md border border-[color:var(--color-border-light)] bg-[color:var(--color-bg-card)] shadow-xl",
           open ? "block" : "hidden"
         )}
         role="menu"
@@ -326,31 +333,37 @@ function UserMenu() {
           {mockUser.email}
         </div>
         <div className="h-px bg-[color:var(--color-border-light)]" />
-        <button
+        <Button
           type="button"
-          className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[color:var(--color-bg-hover)]"
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start gap-2"
           disabled
+          leftIcon={<UserIcon className="w-4 h-4" />}
         >
-          <UserIcon className="w-4 h-4" />
           Mi Perfil
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[color:var(--color-bg-hover)]"
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start gap-2"
           disabled
+          leftIcon={<UserIcon className="w-4 h-4" />}
         >
-          <UserIcon className="w-4 h-4" />
           Configuración
-        </button>
+        </Button>
         <div className="h-px bg-[color:var(--color-border-light)]" />
-        <button
+        <Button
           type="button"
           onClick={handleLogout}
-          className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[color:var(--color-bg-hover)] text-[color:var(--color-danger-700)]"
+          variant="destructive"
+          size="sm"
+          className="w-full justify-start gap-2"
+          leftIcon={<LogOutIcon className="w-4 h-4" />}
         >
-          <LogOutIcon className="w-4 h-4" />
           Cerrar Sesión
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -371,14 +384,17 @@ export function Header({
     >
       <div className="flex items-center gap-3">
         {/* Botón hamburguesa visible en móvil/tablet */}
-        <button
+        <Button
           type="button"
-          className="p-2 rounded-md hover:bg-[color:var(--color-bg-hover)] hide-desktop"
+          variant="ghost"
+          size="icon"
+          className="hide-desktop"
           aria-label="Abrir menú de navegación"
           onClick={onOpenMobile}
+          leftIcon={<MenuIcon className="w-5 h-5" aria-hidden />}
         >
-          <MenuIcon className="w-5 h-5" aria-hidden />
-        </button>
+          Abrir menú
+        </Button>
         <Breadcrumbs />
       </div>
 
@@ -429,7 +445,7 @@ export function ProtectedShell({ children }: { children: React.ReactNode }) {
           <Header onOpenMobile={() => setMobileOpen(true)} />
           <main className="container-padding py-6">{children}</main>
           <footer className="h-[var(--footer-height)] flex items-center justify-center text-xs text-[color:var(--color-text-muted)]">
-            © 2024 Sistema de Gestión de Emails | Versión 1.0 (MVP)
+            © 2025 Sistema de Gestión de Emails | Versión 1.0 
           </footer>
         </div>
       </div>

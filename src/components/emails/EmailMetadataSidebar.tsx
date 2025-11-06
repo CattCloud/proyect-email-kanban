@@ -3,6 +3,7 @@
 import { BadgeCheck, AlertTriangle, ClipboardList, ChevronDown, ChevronUp, Tag, Activity } from "lucide-react";
 import type { EmailMock } from "@/lib/mock-data/emails";
 import { useState } from "react";
+import Button from "@/components/ui/button";
 
 /**
  * EmailMetadataSidebar (HU-UI-003)
@@ -71,13 +72,15 @@ export default function EmailMetadataSidebar({ email }: Props) {
                 <AlertTriangle className="w-3 h-3" aria-hidden />
                 Aún sin procesar
               </span>
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="md"
                 disabled
-                className="block w-full mt-2 px-3 py-2 rounded-md border border-[color:var(--color-border-light)] opacity-[var(--opacity-disabled)] cursor-not-allowed"
+                className="w-full mt-2"
               >
                 Procesar ahora (Semana 2)
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -135,13 +138,22 @@ export default function EmailMetadataSidebar({ email }: Props) {
 
             {/* Estado de tarea: dropdown simulado (sin persistencia) */}
             <div className="relative">
-              <button
+              <Button
                 type="button"
                 onClick={() => setOpenTaskState((v) => !v)}
-                className="w-full flex items-center justify-between px-3 py-2 rounded-md border border-[color:var(--color-border-light)] bg-[color:var(--color-bg-card)] text-sm focus-ring"
+                variant="outline"
+                size="md"
+                className="w-full justify-between"
                 aria-haspopup="listbox"
                 aria-expanded={openTaskState}
                 aria-label="Estado de la tarea"
+                rightIcon={
+                  openTaskState ? (
+                    <ChevronUp className="w-4 h-4" aria-hidden />
+                  ) : (
+                    <ChevronDown className="w-4 h-4" aria-hidden />
+                  )
+                }
               >
                 <span>
                   Estado:{" "}
@@ -155,12 +167,7 @@ export default function EmailMetadataSidebar({ email }: Props) {
                       : "—"}
                   </strong>
                 </span>
-                {openTaskState ? (
-                  <ChevronUp className="w-4 h-4" aria-hidden />
-                ) : (
-                  <ChevronDown className="w-4 h-4" aria-hidden />
-                )}
-              </button>
+              </Button>
 
               <ul
                 className={`absolute left-0 right-0 mt-1 rounded-md border border-[color:var(--color-border-light)] bg-[color:var(--color-bg-card)] shadow-xl text-sm ${

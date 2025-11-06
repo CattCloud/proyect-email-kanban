@@ -1,6 +1,7 @@
 "use client";
 
 import { Filter, X } from "lucide-react";
+import Button from "@/components/ui/button";
 
 export type KanbanCategory = "todas" | "cliente" | "lead" | "interno" | "spam";
 export type KanbanPriority = "todas" | "alta" | "media" | "baja";
@@ -76,15 +77,17 @@ export default function KanbanFilters({
           <option value="baja">Baja</option>
         </select>
 
-        <button
+        <Button
           type="button"
           onClick={onClear}
-          className="ml-2 inline-flex items-center gap-1 px-3 py-2 rounded-md border border-[color:var(--color-border-light)] hover:bg-[color:var(--color-bg-hover)] text-sm focus-ring"
           aria-label="Limpiar filtros"
+          variant="outline"
+          size="sm"
+          className="ml-2 inline-flex gap-1"
+          leftIcon={<X className="w-4 h-4" aria-hidden />}
         >
-          <X className="w-4 h-4" aria-hidden />
           Limpiar
-        </button>
+        </Button>
       </div>
     </div>
   );

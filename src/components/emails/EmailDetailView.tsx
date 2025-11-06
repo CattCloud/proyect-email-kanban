@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Mail, CalendarDays, Tag, AlertCircle, CheckCircle, Edit3, Archive, ShieldAlert, KanbanSquare } from "lucide-react";
+import Button from "@/components/ui/button";
 import type { EmailMock } from "@/lib/mock-data/emails";
 
 type EmailDetailViewProps = {
@@ -34,14 +35,16 @@ export default function EmailDetailView({ email, onBack }: EmailDetailViewProps)
       {/* Header con botón volver y metadatos mínimos */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <button
+          <Button
             type="button"
             onClick={goBack}
             aria-label="Volver a Emails"
-            className="px-2 py-2 rounded-md hover:bg-[color:var(--color-bg-hover)] focus-ring"
+            variant="ghost"
+            size="icon"
+            leftIcon={<ArrowLeft className="w-5 h-5" aria-hidden />}
           >
-            <ArrowLeft className="w-5 h-5" aria-hidden />
-          </button>
+            Volver a Emails
+          </Button>
           <div className="flex items-center gap-2 text-sm text-[color:var(--color-text-secondary)]">
             <Mail className="w-4 h-4" aria-hidden />
             <span className="truncate max-w-[200px] sm:max-w-[320px]">{email.from}</span>
@@ -76,43 +79,48 @@ export default function EmailDetailView({ email, onBack }: EmailDetailViewProps)
 
       {/* Barra de acciones simuladas */}
       <div className="flex flex-wrap items-center gap-2">
-        <button
+        <Button
           type="button"
           onClick={() => toast("Funcionalidad disponible en Semana 2")}
-          className="flex items-center gap-2 px-3 py-2 rounded-md border border-[color:var(--color-border-light)] hover:bg-[color:var(--color-bg-hover)] transition-colors focus-ring"
+          variant="secondary"
+          size="md"
+          leftIcon={<Edit3 className="w-4 h-4" aria-hidden />}
         >
-          <Edit3 className="w-4 h-4" aria-hidden />
           Editar metadata
-        </button>
+        </Button>
 
-        <button
+        <Button
           type="button"
           onClick={() => toast("Funcionalidad disponible en Semana 2")}
-          className="flex items-center gap-2 px-3 py-2 rounded-md border border-[color:var(--color-border-light)] hover:bg-[color:var(--color-bg-hover)] transition-colors focus-ring text-[color:var(--color-danger-700)]"
+          variant="destructive"
+          size="md"
+          leftIcon={<ShieldAlert className="w-4 h-4" aria-hidden />}
         >
-          <ShieldAlert className="w-4 h-4" aria-hidden />
           Marcar como spam
-        </button>
+        </Button>
 
-        <button
+        <Button
           type="button"
           onClick={() => toast("Funcionalidad disponible en Semana 2")}
-          className="flex items-center gap-2 px-3 py-2 rounded-md border border-[color:var(--color-border-light)] hover:bg-[color:var(--color-bg-hover)] transition-colors focus-ring"
+          variant="outline"
+          size="md"
+          leftIcon={<Archive className="w-4 h-4" aria-hidden />}
         >
-          <Archive className="w-4 h-4" aria-hidden />
           Archivar
-        </button>
+        </Button>
 
         {email.hasTask ? (
-          <button
+          <Button
             type="button"
             onClick={() => router.push("/kanban")}
-            className="ml-auto flex items-center gap-2 px-3 py-2 rounded-md border border-[color:var(--color-border-focus)] hover:bg-[color:var(--color-bg-hover)] transition-colors focus-ring"
+            variant="primary"
+            size="md"
+            className="ml-auto"
             aria-label="Ver en Kanban"
+            leftIcon={<KanbanSquare className="w-4 h-4" aria-hidden />}
           >
-            <KanbanSquare className="w-4 h-4" aria-hidden />
             Ver en Kanban
-          </button>
+          </Button>
         ) : null}
       </div>
 

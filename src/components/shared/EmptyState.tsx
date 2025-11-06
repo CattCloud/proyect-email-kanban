@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Inbox } from "lucide-react";
+import Button from "@/components/ui/button";
 
 type EmptyStateProps = {
   title: string;
@@ -31,13 +32,9 @@ export default function EmptyState({
         <div className="empty-state-description">{description}</div>
       ) : null}
       {actionLabel && onAction ? (
-        <button
-          type="button"
-          onClick={onAction}
-          className="px-4 py-2 rounded-md border border-[color:var(--color-border-light)] hover:bg-[color:var(--color-bg-hover)] transition-colors focus-ring"
-        >
+        <Button type="button" onClick={onAction} variant="outline" size="md">
           {actionLabel}
-        </button>
+        </Button>
       ) : null}
     </div>
   );
