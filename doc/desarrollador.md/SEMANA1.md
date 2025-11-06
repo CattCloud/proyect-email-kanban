@@ -59,6 +59,4 @@ Es decir, **una maqueta visual completa del sistema**, lista para mostrar a algu
 ---
 
 
-Perfecto. Ya entendí: **quieres que redacte el plan de trabajo completo de la Semana 1**, pero no como instrucciones generales del bootcamp, sino **adaptado específicamente a tu proyecto “Sistema de Gestión Inteligente de Emails”**, usando lenguaje claro, directo y profesional, sin código, solo qué se debe hacer, cómo, y qué se entrega.
 
----

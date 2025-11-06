@@ -680,4 +680,741 @@
     --destructive: 0 100% 69%;
     --destructive-foreground: 0 0% 100%;
     
-    --border: 0 0%
+    --border: 0 0% 30%;
+    --input: 0 0% 30%;
+    --ring: 210 34% 50%;
+  }
+}
+
+/* ============================================
+ * COMPONENTES PERSONALIZADOS
+ * Estilos base para componentes del sistema
+ * ============================================ */
+@layer components {
+  
+  /* ============================================
+   * BADGES - Componentes de estado
+   * ============================================ */
+  .badge-categoria-cliente {
+    background-color: var(--color-categoria-cliente-bg);
+    color: var(--color-categoria-cliente-text);
+    border: 1px solid var(--color-categoria-cliente-border);
+  }
+
+  .badge-categoria-lead {
+    background-color: var(--color-categoria-lead-bg);
+    color: var(--color-categoria-lead-text);
+    border: 1px solid var(--color-categoria-lead-border);
+  }
+
+  .badge-categoria-interno {
+    background-color: var(--color-categoria-interno-bg);
+    color: var(--color-categoria-interno-text);
+    border: 1px solid var(--color-categoria-interno-border);
+  }
+
+  .badge-categoria-spam {
+    background-color: var(--color-categoria-spam-bg);
+    color: var(--color-categoria-spam-text);
+    border: 1px solid var(--color-categoria-spam-border);
+  }
+
+  .badge-prioridad-alta {
+    background-color: var(--color-prioridad-alta-bg);
+    color: var(--color-prioridad-alta-text);
+    border: 1px solid var(--color-prioridad-alta-border);
+  }
+
+  .badge-prioridad-media {
+    background-color: var(--color-prioridad-media-bg);
+    color: var(--color-prioridad-media-text);
+    border: 1px solid var(--color-prioridad-media-border);
+  }
+
+  .badge-prioridad-baja {
+    background-color: var(--color-prioridad-baja-bg);
+    color: var(--color-prioridad-baja-text);
+    border: 1px solid var(--color-prioridad-baja-border);
+  }
+
+  .badge-estado-todo {
+    background-color: var(--color-estado-todo-bg);
+    color: var(--color-estado-todo-text);
+  }
+
+  .badge-estado-doing {
+    background-color: var(--color-estado-doing-bg);
+    color: var(--color-estado-doing-text);
+  }
+
+  .badge-estado-done {
+    background-color: var(--color-estado-done-bg);
+    color: var(--color-estado-done-text);
+  }
+
+  .badge-procesado {
+    background-color: var(--color-procesado-bg);
+    color: var(--color-procesado-text);
+  }
+
+  .badge-sin-procesar {
+    background-color: var(--color-sin-procesar-bg);
+    color: var(--color-sin-procesar-text);
+  }
+
+  /* ============================================
+   * CARDS - Estilos de tarjetas
+   * ============================================ */
+  .card-base {
+    background-color: var(--color-bg-card);
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    transition: all var(--duration-base) var(--ease-in-out);
+  }
+
+  .card-hover {
+    @apply card-base;
+  }
+
+  .card-hover:hover {
+    box-shadow: var(--shadow-card-hover);
+    transform: translateY(-2px);
+  }
+
+  .card-clickable {
+    @apply card-hover cursor-pointer;
+  }
+
+  .card-clickable:active {
+    transform: translateY(0);
+  }
+
+  /* ============================================
+   * BUTTONS - Variantes personalizadas
+   * ============================================ */
+  .btn-base {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-md);
+    font-weight: var(--font-weight-medium);
+    transition: all var(--duration-base) var(--ease-in-out);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .btn-base:disabled {
+    opacity: var(--opacity-disabled);
+    cursor: not-allowed;
+  }
+
+  .btn-sm {
+    height: var(--button-height-sm);
+    padding: 0 var(--button-padding-x-sm);
+    font-size: var(--font-size-sm);
+  }
+
+  .btn-md {
+    height: var(--button-height-md);
+    padding: 0 var(--button-padding-x-md);
+    font-size: var(--font-size-sm);
+  }
+
+  .btn-lg {
+    height: var(--button-height-lg);
+    padding: 0 var(--button-padding-x-lg);
+    font-size: var(--font-size-base);
+  }
+
+  /* ============================================
+   * INPUTS - Estilos de formulario
+   * ============================================ */
+  .input-base {
+    width: 100%;
+    border: 1px solid var(--color-border-default);
+    border-radius: var(--radius-md);
+    background-color: var(--color-bg-card);
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm);
+    transition: all var(--duration-base) var(--ease-in-out);
+  }
+
+  .input-base:focus {
+    outline: none;
+    border-color: var(--color-border-focus);
+    box-shadow: 0 0 0 3px rgba(96, 126, 157, 0.1);
+  }
+
+  .input-base:disabled {
+    background-color: var(--color-bg-disabled);
+    cursor: not-allowed;
+    opacity: var(--opacity-disabled);
+  }
+
+  .input-base::placeholder {
+    color: var(--color-text-placeholder);
+  }
+
+  .input-error {
+    border-color: var(--color-border-error);
+  }
+
+  .input-error:focus {
+    box-shadow: 0 0 0 3px rgba(255, 100, 106, 0.1);
+  }
+
+  /* ============================================
+   * TABLE - Estilos de tabla
+   * ============================================ */
+  .table-base {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .table-header {
+    background-color: var(--color-bg-muted);
+    font-weight: var(--font-weight-medium);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    text-align: left;
+  }
+
+  .table-row {
+    border-bottom: 1px solid var(--color-border-light);
+    transition: background-color var(--duration-base) var(--ease-in-out);
+  }
+
+  .table-row:hover {
+    background-color: var(--color-bg-hover);
+  }
+
+  .table-row-clickable {
+    @apply table-row cursor-pointer;
+  }
+
+  .table-cell {
+    padding: var(--space-4);
+    font-size: var(--font-size-sm);
+  }
+
+  /* ============================================
+   * SIDEBAR - Navegación lateral
+   * ============================================ */
+  .sidebar-base {
+    width: var(--sidebar-width-expanded);
+    height: 100vh;
+    background-color: var(--color-bg-card);
+    border-right: 1px solid var(--color-border-light);
+    transition: width var(--duration-slow) var(--ease-in-out);
+  }
+
+  .sidebar-collapsed {
+    width: var(--sidebar-width-collapsed);
+  }
+
+  .sidebar-nav-item {
+    display: flex;
+    align-items: center;
+    padding: var(--space-3) var(--space-4);
+    color: var(--color-text-secondary);
+    border-radius: var(--radius-md);
+    transition: all var(--duration-base) var(--ease-in-out);
+    cursor: pointer;
+  }
+
+  .sidebar-nav-item:hover {
+    background-color: var(--color-bg-hover);
+    color: var(--color-text-primary);
+  }
+
+  .sidebar-nav-item-active {
+    background-color: var(--color-bg-active);
+    color: var(--color-primary-700);
+    font-weight: var(--font-weight-medium);
+    border-left: 3px solid var(--color-primary-500);
+  }
+
+  /* ============================================
+   * HEADER - Barra superior
+   * ============================================ */
+  .header-base {
+    height: var(--header-height);
+    background-color: var(--color-bg-header);
+    border-bottom: 1px solid var(--color-border-light);
+    display: flex;
+    align-items: center;
+    padding: 0 var(--space-6);
+    position: sticky;
+    top: 0;
+    z-index: var(--z-index-sticky);
+  }
+
+  /* ============================================
+   * MODAL / DIALOG - Modales
+   * ============================================ */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: var(--color-bg-overlay);
+    z-index: var(--z-index-modal-backdrop);
+    animation: fadeIn var(--duration-base) var(--ease-out);
+  }
+
+  .modal-content {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: var(--color-bg-card);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-modal);
+    z-index: var(--z-index-modal);
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: slideUp var(--duration-slow) var(--ease-out);
+  }
+
+  /* ============================================
+   * TOAST / NOTIFICATION - Notificaciones
+   * ============================================ */
+  .toast-base {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    font-size: var(--font-size-sm);
+    animation: slideDown var(--duration-slow) var(--ease-bounce);
+  }
+
+  .toast-success {
+    @apply toast-base;
+    background-color: var(--color-success-light);
+    color: var(--color-success-text);
+    border-left: 4px solid var(--color-success);
+  }
+
+  .toast-error {
+    @apply toast-base;
+    background-color: var(--color-error-light);
+    color: var(--color-error-text);
+    border-left: 4px solid var(--color-error);
+  }
+
+  .toast-warning {
+    @apply toast-base;
+    background-color: var(--color-warning-light);
+    color: var(--color-warning-text);
+    border-left: 4px solid var(--color-warning);
+  }
+
+  .toast-info {
+    @apply toast-base;
+    background-color: var(--color-info-light);
+    color: var(--color-info-text);
+    border-left: 4px solid var(--color-info);
+  }
+
+  /* ============================================
+   * EMPTY STATE - Estados vacíos
+   * ============================================ */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-12) var(--space-6);
+    text-align: center;
+  }
+
+  .empty-state-icon {
+    width: var(--icon-size-xl);
+    height: var(--icon-size-xl);
+    color: var(--color-text-muted);
+    opacity: 0.5;
+    margin-bottom: var(--space-4);
+  }
+
+  .empty-state-title {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-primary);
+    margin-bottom: var(--space-2);
+  }
+
+  .empty-state-description {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    max-width: 400px;
+    margin-bottom: var(--space-6);
+  }
+
+  /* ============================================
+   * LOADING / SKELETON - Estados de carga
+   * ============================================ */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--color-neutral-200) 0%,
+      var(--color-neutral-100) 50%,
+      var(--color-neutral-200) 100%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s ease-in-out infinite;
+    border-radius: var(--radius-md);
+  }
+
+  @keyframes skeleton-loading {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
+  }
+
+  .spinner {
+    display: inline-block;
+    width: var(--icon-size-md);
+    height: var(--icon-size-md);
+    border: 2px solid var(--color-border-light);
+    border-top-color: var(--color-primary-500);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* ============================================
+   * KANBAN - Tablero específico
+   * ============================================ */
+  .kanban-board {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-6);
+    padding: var(--space-6);
+  }
+
+  .kanban-column {
+    background-color: var(--color-bg-muted);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    min-height: 400px;
+  }
+
+  .kanban-column-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-4);
+    font-weight: var(--font-weight-semibold);
+    font-size: var(--font-size-base);
+  }
+
+  .kanban-card {
+    @apply card-base;
+    padding: var(--space-4);
+    margin-bottom: var(--space-3);
+    cursor: grab;
+  }
+
+  .kanban-card:active {
+    cursor: grabbing;
+    transform: rotate(2deg);
+  }
+
+  .kanban-card:hover {
+    box-shadow: var(--shadow-md);
+  }
+
+  /* ============================================
+   * EMAIL CARD - Tarjetas de email
+   * ============================================ */
+  .email-card {
+    @apply card-clickable;
+    padding: var(--space-4);
+  }
+
+  .email-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-2);
+  }
+
+  .email-card-from {
+    font-weight: var(--font-weight-medium);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+  }
+
+  .email-card-date {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+  }
+
+  .email-card-subject {
+    font-weight: var(--font-weight-semibold);
+    font-size: var(--font-size-base);
+    color: var(--color-text-primary);
+    margin-bottom: var(--space-2);
+    @apply truncate-2-lines;
+  }
+
+  .email-card-body {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    margin-bottom: var(--space-3);
+    @apply truncate-3-lines;
+  }
+
+  .email-card-footer {
+    display: flex;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+
+  /* ============================================
+   * METRIC CARD - Tarjetas de métricas
+   * ============================================ */
+  .metric-card {
+    @apply card-hover;
+    padding: var(--space-6);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .metric-card-icon {
+    position: absolute;
+    top: var(--space-4);
+    right: var(--space-4);
+    width: var(--icon-size-xl);
+    height: var(--icon-size-xl);
+    color: var(--color-primary-300);
+    opacity: 0.3;
+  }
+
+  .metric-card-label {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    margin-bottom: var(--space-2);
+    text-transform: uppercase;
+    letter-spacing: var(--letter-spacing-wide);
+  }
+
+  .metric-card-value {
+    font-size: var(--font-size-4xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text-primary);
+    line-height: var(--line-height-tight);
+  }
+
+  .metric-card-description {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    margin-top: var(--space-2);
+  }
+
+  /* ============================================
+   * BREADCRUMBS - Migas de pan
+   * ============================================ */
+  .breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+  }
+
+  .breadcrumbs-separator {
+    color: var(--color-text-muted);
+  }
+
+  .breadcrumbs-item {
+    color: var(--color-text-secondary);
+  }
+
+  .breadcrumbs-item:hover {
+    color: var(--color-text-primary);
+  }
+
+  .breadcrumbs-item-active {
+    color: var(--color-text-primary);
+    font-weight: var(--font-weight-medium);
+  }
+
+  /* ============================================
+   * AVATAR - Avatares de usuario
+   * ============================================ */
+  .avatar-base {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-full);
+    overflow: hidden;
+    background-color: var(--color-primary-100);
+    color: var(--color-primary-700);
+    font-weight: var(--font-weight-medium);
+  }
+
+  .avatar-xs {
+    width: var(--avatar-size-xs);
+    height: var(--avatar-size-xs);
+    font-size: 0.625rem;
+  }
+
+  .avatar-sm {
+    width: var(--avatar-size-sm);
+    height: var(--avatar-size-sm);
+    font-size: var(--font-size-xs);
+  }
+
+  .avatar-md {
+    width: var(--avatar-size-md);
+    height: var(--avatar-size-md);
+    font-size: var(--font-size-sm);
+  }
+
+  .avatar-lg {
+    width: var(--avatar-size-lg);
+    height: var(--avatar-size-lg);
+    font-size: var(--font-size-base);
+  }
+
+  .avatar-xl {
+    width: var(--avatar-size-xl);
+    height: var(--avatar-size-xl);
+    font-size: var(--font-size-lg);
+  }
+}
+
+/* ============================================
+ * RESPONSIVE UTILITIES
+ * Clases helper para responsive design
+ * ============================================ */
+@layer utilities {
+  /* Hide/Show por breakpoint */
+  @media (max-width: 639px) {
+    .hide-mobile {
+      display: none !important;
+    }
+  }
+
+  @media (min-width: 640px) and (max-width: 1023px) {
+    .hide-tablet {
+      display: none !important;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .hide-desktop {
+      display: none !important;
+    }
+  }
+
+  /* Stack en móvil */
+  @media (max-width: 767px) {
+    .stack-mobile {
+      flex-direction: column !important;
+    }
+  }
+
+  /* Container responsive padding */
+  .container-padding {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
+
+  @media (min-width: 768px) {
+    .container-padding {
+      padding-left: var(--space-6);
+      padding-right: var(--space-6);
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .container-padding {
+      padding-left: var(--space-8);
+      padding-right: var(--space-8);
+    }
+  }
+}
+
+/* ============================================
+ * PRINT STYLES (Opcional)
+ * ============================================ */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background-color: white;
+    color: black;
+  }
+
+  .sidebar-base,
+  .header-base {
+    display: none;
+  }
+}
+```
+
+---
+
+## 📋 Documentación de Uso del Sistema de Diseño v2.0
+
+### Cómo usar las variables CSS:
+
+```typescript
+// En componentes React/TSX
+<div className="bg-[var(--color-bg-card)] text-[var(--color-text-primary)]">
+
+// En archivos CSS personalizados
+.mi-componente {
+  background-color: var(--color-primary-500);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+}
+```
+
+### Clases de utilidad personalizadas listas para usar:
+
+```typescript
+// Badges de categoría
+<Badge className="badge-categoria-cliente">Cliente</Badge>
+<Badge className="badge-prioridad-alta">Alta</Badge>
+<Badge className="badge-estado-done">Completado</Badge>
+
+// Cards
+<div className="card-clickable">...</div>
+<div className="email-card">...</div>
+<div className="metric-card">...</div>
+
+// Estados
+<div className="empty-state">...</div>
+<div className="skeleton">...</div>
+<div className="spinner">...</div>
+
+// Kanban
+<div className="kanban-board">
+  <div className="kanban-column">
+    <div className="kanban-card">...</div>
+  </div>
+</div>
+```
+
+### Ventajas de esta centralización:
+
+✅ **Único punto de verdad** para todos los estilos  
+✅ **Fácil mantenimiento** - cambiar un color afecta todo el sistema  
+✅ **Consistencia garantizada** - todos usan las mismas variables  
+✅ **Performance** - variables CSS nativas (muy rápidas)  
+✅ **Dark mode listo** - solo descomentar la sección  
+✅ **Accesibilidad** - contraste y focus states incluidos
