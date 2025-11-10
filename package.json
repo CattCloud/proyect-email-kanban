@@ -22,13 +22,13 @@
     "prisma": "^6.19.0",
     "react": "19.2.0",
     "react-dom": "19.2.0",
+    "react-dropzone": "^14.3.8",
     "react-loading-skeleton": "^3.5.0",
     "react-spinners": "^0.17.0",
     "tailwind-merge": "^3.3.1",
     "zod": "^4.1.12",
     "zustand": "^5.0.8"
   },
- 
   "devDependencies": {
     "@prisma/client": "^6.19.0",
     "@tailwindcss/postcss": "^4",

@@ -1,0 +1,13 @@
+[
+  {
+    "email": "cliente@empresa.com",
+    "received_at": "2024-11-01T09:15:00Z",
+    "subject": "Reunión urgente - Propuesta Q4",
+    "body": "Necesito que revisemos la propuesta y definamos los próximos pasos."
+  },
+  {
+    "email": "otro@cliente.com",
+    "subject": "Consulta sobre servicios",
+    "body": "Me gustaría conocer más detalles sobre el plan empresarial."
+  }
+]

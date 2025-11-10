@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Upload, X, FileJson, CheckCircle2, AlertCircle } from "lucide-react";
+import { Upload, X, FileJson, CheckCircle2, AlertCircle, Copy } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { importEmailsFromJSON } from "@/actions/emails";
 import type { ImportResult } from "@/actions/emails";
+import { useDropzone } from "react-dropzone";
 
 type Step = "idle" | "preview" | "importing" | "result";
 
@@ -33,6 +34,33 @@ export default function ImportEmailsModal({ onImported }: ImportEmailsModalProps
   const [clientError, setClientError] = useState<string | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Estado y utilidades para "Ejemplo rápido"
+  const [copiedExample, setCopiedExample] = useState(false);
+
+  const exampleJSON = `[
+  {
+    "email": "cliente@empresa.com",
+    "received_at": "2024-11-01T09:15:00Z",
+    "subject": "Reunión urgente - Propuesta Q4",
+    "body": "Necesito que revisemos la propuesta..."
+  },
+  {
+    "email": "otro@cliente.com",
+    "subject": "Consulta sobre servicios",
+    "body": "Me gustaría conocer más detalles..."
+  }
+]`;
+
+  const handleCopyExample = async () => {
+    try {
+      await navigator.clipboard.writeText(exampleJSON);
+      setCopiedExample(true);
+      setTimeout(() => setCopiedExample(false), 1500);
+    } catch {
+      // no-op
+    }
+  };
 
   const inputRef = useRef<HTMLInputElement | null>(null);
   const modalTitleId = "import-emails-modal-title";
@@ -113,6 +141,21 @@ export default function ImportEmailsModal({ onImported }: ImportEmailsModalProps
     }
   };
 
+  // Drag & Drop (react-dropzone)
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    const file = acceptedFiles?.[0];
+    if (file) {
+      void handleFileChange(file);
+    }
+  }, [handleFileChange]);
+
+  const { getRootProps, getInputProps, isDragActive, open: openFileDialog } = useDropzone({
+    onDrop,
+    accept: { 'application/json': ['.json'] },
+    multiple: false,
+    noClick: true
+  });
+
   const handleImport = async () => {
     if (!jsonText) return;
     try {
@@ -171,7 +214,9 @@ export default function ImportEmailsModal({ onImported }: ImportEmailsModalProps
             aria-hidden="true"
           />
 
-          <div className="relative card-base w-[min(720px,92vw)] p-6 animate-slide-up">
+          <div className="relative card-base w-[min(720px,92vw)] max-h-[90vh] flex flex-col animate-slide-up">
+            <div className="flex-1 overflow-y-auto pr-2 scrollbar-thin">
+              <div className="p-6">
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h2 id={modalTitleId} className="text-[length:var(--font-size-xl)] font-semibold text-[color:var(--color-text-primary)]">
@@ -196,31 +241,43 @@ export default function ImportEmailsModal({ onImported }: ImportEmailsModalProps
             <div className="space-y-4">
               {(step === "idle" || step === "preview") && (
                 <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 text-[color:var(--color-text-secondary)]">
-                        <FileJson className="w-5 h-5" />
-                        <span className="text-[length:var(--font-size-sm)]">
-                          {fileName ? fileName : "Ningún archivo seleccionado"}
-                        </span>
+                  <div
+                    {...getRootProps()}
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Arrastra tu archivo JSON aquí o haz clic para seleccionarlo"
+                    className={`rounded-md border-2 ${isDragActive ? "border-[color:var(--color-primary-500)] bg-[color:var(--color-bg-muted)]" : "border-[color:var(--color-border-light)]"} border-dashed p-6 text-center transition-colors`}
+                    onClick={(e) => { e.preventDefault(); openFileDialog(); }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        openFileDialog();
+                      }
+                    }}
+                  >
+                    <input
+                      {...getInputProps()}
+                      className="sr-only"
+                      aria-label="Seleccionar archivo JSON para importación"
+                    />
+                    <div className="flex flex-col items-center gap-2">
+                      <FileJson className="w-6 h-6 text-[color:var(--color-text-secondary)]" />
+                      <p className="text-[length:var(--font-size-sm)] text-[color:var(--color-text-secondary)]">
+                        {isDragActive ? "Suelta el archivo aquí" : "Arrastra tu archivo .json aquí"}
+                      </p>
+                      <div className="text-[length:var(--font-size-xs)] text-[color:var(--color-text-muted)]">
+                        {fileName ? `Seleccionado: ${fileName}` : "O usa el botón para seleccionar"}
                       </div>
-                    </div>
-                    <div>
-                      <input
-                        ref={inputRef}
-                        type="file"
-                        accept=".json,application/json"
-                        className="sr-only"
-                        onChange={(e) => handleFileChange(e.target.files?.[0])}
-                        aria-label="Seleccionar archivo JSON para importación"
-                      />
-                      <Button
-                        variant="outline"
-                        onClick={() => inputRef.current?.click()}
-                        leftIcon={<Upload className="w-4 h-4" />}
-                      >
-                        Seleccionar archivo
-                      </Button>
+                      <div className="mt-2">
+                        <Button
+                          variant="outline"
+                          onClick={(e) => { e.preventDefault(); openFileDialog(); }}
+                          leftIcon={<Upload className="w-4 h-4" />}
+                          aria-label="Seleccionar archivo desde el explorador"
+                        >
+                          Seleccionar archivo
+                        </Button>
+                      </div>
                     </div>
                   </div>
 
@@ -230,6 +287,31 @@ export default function ImportEmailsModal({ onImported }: ImportEmailsModalProps
                       <div className="text-[length:var(--font-size-sm)]">{clientError}</div>
                     </div>
                   )}
+
+                  <details className="rounded-md border border-[color:var(--color-border-light)]">
+                    <summary className="px-4 py-3 cursor-pointer text-[length:var(--font-size-sm)] text-[color:var(--color-text-secondary)]">
+                      Ver ejemplo JSON
+                    </summary>
+                    <div className="px-4 pb-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-[length:var(--font-size-xs)] text-[color:var(--color-text-muted)]">
+                          Campos requeridos: email, subject, body • Opcional: received_at • El campo &quot;id&quot; se ignora si se incluye
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleCopyExample}
+                          leftIcon={<Copy className="w-4 h-4" />}
+                          aria-label={copiedExample ? "Ejemplo copiado" : "Copiar ejemplo JSON"}
+                        >
+                          {copiedExample ? "Copiado" : "Copiar"}
+                        </Button>
+                      </div>
+                      <pre className="mt-3 p-3 rounded-md bg-[color:var(--color-bg-muted)] overflow-auto text-[length:var(--font-size-xs)]">
+                        <code>{exampleJSON}</code>
+                      </pre>
+                    </div>
+                  </details>
 
                   {step === "preview" && (
                     <div className="rounded-md border border-[color:var(--color-border-light)]">
@@ -311,31 +393,43 @@ export default function ImportEmailsModal({ onImported }: ImportEmailsModalProps
               )}
             </div>
 
-            <div className="mt-6 flex items-center justify-between gap-3">
-              <div className="text-[length:var(--font-size-xs)] text-[color:var(--color-text-muted)]">
-                Formato esperado: arreglo JSON con campos: id?, email, received_at?, subject, body
-              </div>
+                <div className="mt-6 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    {step !== "importing" && (
+                      <Button variant="secondary" asChild>
+                        <a
+                          href="/templates/email-import-template.json"
+                          download
+                          aria-label="Descargar plantilla de ejemplo JSON"
+                        >
+                          Descargar plantilla
+                        </a>
+                      </Button>
+                    )}
+                  </div>
 
-              <div className="flex items-center gap-2">
-                {step !== "importing" && (
-                  <Button variant="ghost" onClick={closeModal}>Cerrar</Button>
-                )}
-                {(step === "idle" || step === "preview") && (
-                  <Button
-                    variant="primary"
-                    onClick={handleImport}
-                    disabled={!jsonText || step === "idle"}
-                    loading={loading}
-                    aria-disabled={!jsonText || loading}
-                  >
-                    {step === "preview" ? `Importar ${totalItems} emails` : "Importar"}
-                  </Button>
-                )}
-                {step === "result" && (
-                  <Button variant="link" asChild>
-                    <Link href="/emails" aria-label="Ir a la lista de emails">Ver Emails</Link>
-                  </Button>
-                )}
+                  <div className="flex items-center gap-2">
+                    {step !== "importing" && (
+                      <Button variant="ghost" onClick={closeModal}>Cerrar</Button>
+                    )}
+                    {(step === "idle" || step === "preview") && (
+                      <Button
+                        variant="primary"
+                        onClick={handleImport}
+                        disabled={!jsonText || step === "idle"}
+                        loading={loading}
+                        aria-disabled={!jsonText || loading}
+                      >
+                        {step === "preview" ? `Importar ${totalItems} emails` : "Importar"}
+                      </Button>
+                    )}
+                    {step === "result" && (
+                      <Button variant="link" asChild>
+                        <Link href="/emails" aria-label="Ir a la lista de emails">Ver Emails</Link>
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
