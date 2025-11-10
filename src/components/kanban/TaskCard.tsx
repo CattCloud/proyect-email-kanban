@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { GripVertical, Mail } from "lucide-react";
-import type { EmailMock } from "@/lib/mock-data/emails";
+import { EmailWithMetadata } from "@/types";
 
 /**
  * TaskCard: card de tarea para el tablero Kanban (HU-UI-004)
@@ -10,26 +10,26 @@ import type { EmailMock } from "@/lib/mock-data/emails";
  * - Click navega al detalle del email (/emails/[id])
  * - Usa clases definidas en globals.css: .kanban-card, badges y utilidades de truncado
  */
-export default function TaskCard({ email }: { email: EmailMock }) {
+export default function TaskCard({ email }: { email: EmailWithMetadata }) {
   const router = useRouter();
 
   const prioridadClass =
-    email.priority === "alta"
+    email.metadata?.priority === "alta"
       ? "badge-prioridad-alta"
-      : email.priority === "media"
+      : email.metadata?.priority === "media"
       ? "badge-prioridad-media"
-      : email.priority === "baja"
+      : email.metadata?.priority === "baja"
       ? "badge-prioridad-baja"
       : "";
 
   const categoriaClass =
-    email.category === "cliente"
+    email.metadata?.category === "cliente"
       ? "badge-categoria-cliente"
-      : email.category === "lead"
+      : email.metadata?.category === "lead"
       ? "badge-categoria-lead"
-      : email.category === "interno"
+      : email.metadata?.category === "interno"
       ? "badge-categoria-interno"
-      : email.category === "spam"
+      : email.metadata?.category === "spam"
       ? "badge-categoria-spam"
       : "";
 
@@ -65,22 +65,22 @@ export default function TaskCard({ email }: { email: EmailMock }) {
       </div>
 
       {/* Descripción de tarea (si existe) */}
-      {email.hasTask && email.taskDescription ? (
+      {email.metadata?.hasTask && email.metadata?.taskDescription ? (
         <div className="text-sm text-[color:var(--color-text-secondary)] truncate-3-lines mb-3">
-          {email.taskDescription}
+          {email.metadata.taskDescription}
         </div>
       ) : null}
 
       {/* Badges */}
       <div className="flex flex-wrap items-center gap-2">
-        {email.priority ? (
+        {email.metadata?.priority ? (
           <span className={`inline-flex items-center px-2 py-1 rounded text-xs ${prioridadClass}`}>
-            {email.priority}
+            {email.metadata.priority}
           </span>
         ) : null}
-        {email.category ? (
+        {email.metadata?.category ? (
           <span className={`inline-flex items-center px-2 py-1 rounded text-xs ${categoriaClass}`}>
-            {email.category}
+            {email.metadata.category}
           </span>
         ) : null}
       </div>

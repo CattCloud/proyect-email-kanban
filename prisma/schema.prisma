@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Email {
+  id         String         @id @default(cuid())
+  from       String
+  subject    String
+  body       String
+  receivedAt DateTime       @default(now())
+  processed  Boolean        @default(false)
+  metadata   EmailMetadata?
+
+  @@index([from])
+  @@index([subject])
+  @@index([processed])
+  @@index([receivedAt])
+}
+
+model EmailMetadata {
+  id              String  @id @default(cuid())
+  emailId         String  @unique
+  category        String?
+  priority        String?
+  hasTask         Boolean @default(false)
+  taskDescription String?
+  taskStatus      String?
+  email           Email   @relation(fields: [emailId], references: [id], onDelete: Cascade)
+
+  @@index([category])
+  @@index([priority])
+  @@index([hasTask])
+  @@index([taskStatus])
+}

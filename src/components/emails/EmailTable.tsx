@@ -1,12 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronUp, Upload, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronUp, Sparkles, RefreshCw } from "lucide-react";
 import SearchBar from "@/components/shared/SearchBar";
 import EmptyState from "@/components/shared/EmptyState";
-import { mockEmails, type EmailMock } from "@/lib/mock-data/emails";
 import Button from "@/components/ui/button";
+import { getEmails } from "@/actions/emails";
+import ImportEmailsModal from "@/components/emails/ImportEmailsModal";
+import {
+  EmailWithMetadata,
+  EmailFilterEstado,
+  EmailFilterCategoria,
+  SortDirection
+} from "@/types";
+import type { Email as PrismaEmail, EmailMetadata as PrismaEmailMetadata } from "@prisma/client";
 
 /**
  * HU-UI-002: Listado de Emails con Tabla Interactiva
@@ -20,8 +28,12 @@ import Button from "@/components/ui/button";
  * Estilos y tokens desde src/app/globals.css
  */
 
-type SortDir = "asc" | "desc";
 const PAGE_SIZE = 10;
+
+type ServerEmail = PrismaEmail & {
+  metadata: PrismaEmailMetadata | null;
+  receivedAt: string | Date;
+};
 
 function formatRelative(iso: string): string {
   const now = new Date().getTime();
@@ -43,21 +55,74 @@ function formatRelative(iso: string): string {
 
 export default function EmailTable() {
   const router = useRouter();
+  const requestIdRef = useRef(0);
 
   // UI State
   const [query, setQuery] = useState("");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [sortDir, setSortDir] = useState<SortDirection>("desc");
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [page, setPage] = useState(1);
-  const [filterEstado, setFilterEstado] = useState<"todos" | "procesado" | "sin-procesar">("todos");
-  const [filterCategoria, setFilterCategoria] = useState<"todas" | "cliente" | "lead" | "interno" | "spam">("todas");
+  const [filterEstado, setFilterEstado] = useState<EmailFilterEstado>("todos");
+  const [filterCategoria, setFilterCategoria] = useState<EmailFilterCategoria>("todas");
+  
+  // Data State
+  const [emails, setEmails] = useState<EmailWithMetadata[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Cargar emails desde Server Actions con control de concurrencia
+  useEffect(() => {
+    const reqId = ++requestIdRef.current;
+    let cancelled = false;
+    async function loadEmails() {
+      try {
+        setLoading(true);
+        setError(null);
+        const result = await getEmails();
+        if (cancelled || requestIdRef.current !== reqId) return;
+
+        if (result.success) {
+          const raw = Array.isArray(result.data) ? (result.data as ServerEmail[]) : [];
+          console.log("Emails cargados (raw):", raw);
+          const normalized: EmailWithMetadata[] = raw.map((e) => {
+            const d = e.receivedAt instanceof Date ? e.receivedAt : new Date(e.receivedAt);
+            const safeDate = isNaN(d.getTime()) ? new Date(0) : d;
+            return {
+              ...(e as unknown as EmailWithMetadata),
+              receivedAt: safeDate,
+              metadata: e.metadata ?? null,
+            };
+          });
+          console.log("Emails normalizados:", normalized);
+          setEmails(normalized);
+        } else {
+          setError(result.error || "Error al cargar los emails");
+        }
+      } catch (err) {
+        if (cancelled || requestIdRef.current !== reqId) return;
+        setError("Error de conexión al servidor");
+        console.error("Error loading emails:", err);
+      } finally {
+        if (cancelled || requestIdRef.current !== reqId) return;
+        setLoading(false);
+      }
+    }
+
+    loadEmails();
+
+    return () => {
+      cancelled = true;
+      // Invalida cualquier respuesta tardía de esta instancia
+      requestIdRef.current++;
+    };
+  }, []); // Se ejecuta solo al montar el componente
 
   // Derivados
   const selectedCount = useMemo(() => Object.values(selected).filter(Boolean).length, [selected]);
 
   // Filtrar por búsqueda, estado y categoría
   const filtered = useMemo(() => {
-    let data = [...mockEmails];
+    let data = [...emails];
 
     // Filtro por estado (procesado / sin procesar)
     if (filterEstado !== "todos") {
@@ -65,7 +130,7 @@ export default function EmailTable() {
     }
     // Filtro por categoría
     if (filterCategoria !== "todas") {
-      data = data.filter(e => e.category === filterCategoria);
+      data = data.filter(e => e.metadata?.category === filterCategoria);
     }
     // Búsqueda
     if (query.trim() !== "") {
@@ -77,12 +142,12 @@ export default function EmailTable() {
     }
     // Ordenamiento por fecha
     data.sort((a, b) => {
-      const da = new Date(a.receivedAt).getTime();
-      const db = new Date(b.receivedAt).getTime();
+      const da = a.receivedAt.getTime();
+      const db = b.receivedAt.getTime();
       return sortDir === "asc" ? da - db : db - da;
     });
     return data;
-  }, [query, sortDir, filterEstado, filterCategoria]);
+  }, [emails, query, sortDir, filterEstado, filterCategoria]);
 
   // Paginación
   const total = filtered.length;
@@ -90,10 +155,25 @@ export default function EmailTable() {
   const startIdx = (page - 1) * PAGE_SIZE;
   const endIdx = Math.min(total, startIdx + PAGE_SIZE);
   const pageData = filtered.slice(startIdx, endIdx);
+  
+  // Asegurar que la página actual sea válida si cambia el total de páginas (evita páginas vacías intermitentes)
+  useEffect(() => {
+    setPage((p) => Math.min(Math.max(1, p), totalPages));
+  }, [totalPages]);
+
+  // Debug logs
+  console.log("Debug - EmailTable:", {
+    emailsLength: emails.length,
+    filteredLength: filtered.length,
+    pageDataLength: pageData.length,
+    total,
+    loading,
+    error
+  });
 
   // Handlers
   function toggleSortByDate() {
-    setSortDir(d => (d === "asc" ? "desc" : "asc"));
+    setSortDir(d => (d === "asc" ? "desc" : "asc") as SortDirection);
   }
 
   function isAllPageSelected() {
@@ -118,13 +198,13 @@ export default function EmailTable() {
     router.push(`/emails/${id}`);
   }
 
-  function onImport() {
-    alert("Funcionalidad disponible en Semana 2");
+  function onRefresh() {
+    window.location.reload();
   }
 
   function onProcessAI() {
     if (selectedCount === 0) return;
-    alert(`Procesamiento con IA disponible en Semana 2 (seleccionados: ${selectedCount})`);
+    alert(`Procesamiento con IA disponible en futuras versiones (seleccionados: ${selectedCount})`);
   }
 
   // Reset página cuando cambian filtros/búsqueda
@@ -141,14 +221,15 @@ export default function EmailTable() {
         <div className="flex items-center gap-2">
           <Button
             type="button"
-            onClick={onImport}
-            aria-label="Importar JSON"
+            onClick={onRefresh}
+            aria-label="Recargar emails"
             variant="outline"
             size="md"
-            leftIcon={<Upload className="w-4 h-4" aria-hidden />}
+            leftIcon={<RefreshCw className="w-4 h-4" aria-hidden />}
           >
-            Importar JSON
+            Recargar
           </Button>
+          <ImportEmailsModal onImported={() => window.location.reload()} />
           <Button
             type="button"
             onClick={onProcessAI}
@@ -214,13 +295,33 @@ export default function EmailTable() {
 
       {/* Tabla / Cards responsive */}
       <div className="card-base overflow-x-auto">
-        {total === 0 ? (
-          <EmptyState
-            title="No hay emails importados aún"
-            description="Importa un archivo JSON para comenzar (simulado en Semana 1)."
-            actionLabel="Importar JSON"
-            onAction={onImport}
-          />
+        {loading ? (
+          <div className="flex items-center justify-center p-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[color:var(--color-primary-500)]"></div>
+            <span className="ml-2 text-[color:var(--color-text-secondary)]">Cargando emails...</span>
+          </div>
+        ) : error ? (
+          <div className="p-8 text-center">
+            <div className="text-red-500 mb-4">Error: {error}</div>
+            <Button onClick={onRefresh} variant="outline" size="sm">
+              Reintentar
+            </Button>
+          </div>
+        ) : emails.length === 0 ? (
+          <div className="p-8 text-center">
+            <div className="text-[color:var(--color-text-primary)] mb-4">No hay emails importados aún</div>
+            <div className="text-[color:var(--color-text-secondary)] mb-6">Importa un archivo JSON para comenzar.</div>
+            <ImportEmailsModal onImported={() => window.location.reload()} />
+          </div>
+        ) : total === 0 ? (
+          <div className="p-6">
+            <div className="text-center text-[color:var(--color-text-primary)]">
+              No se encontraron emails con ese criterio
+            </div>
+            <div className="text-center text-[color:var(--color-text-secondary)] mt-2">
+              Intenta ajustar la búsqueda o filtros.
+            </div>
+          </div>
         ) : (
           <>
             {/* Tabla Desktop */}
@@ -269,7 +370,7 @@ export default function EmailTable() {
                     <td className="py-3 px-2">
                       <div className="truncate-2-lines max-w-[480px]">{e.subject}</div>
                     </td>
-                    <td className="py-3 px-2 whitespace-nowrap">{formatRelative(e.receivedAt)}</td>
+                    <td className="py-3 px-2 whitespace-nowrap">{formatRelative(e.receivedAt.toISOString())}</td>
                     <td className="py-3 px-2">
                       {e.processed ? (
                         <span className="badge-procesado inline-flex items-center px-2 py-1 rounded text-xs">Procesado</span>
@@ -294,7 +395,7 @@ export default function EmailTable() {
                 >
                   <div className="email-card-header">
                     <div className="email-card-from">{e.from}</div>
-                    <div className="email-card-date">{formatRelative(e.receivedAt)}</div>
+                    <div className="email-card-date">{formatRelative(e.receivedAt.toISOString())}</div>
                   </div>
                   <div className="email-card-subject">{e.subject}</div>
                   <div className="email-card-footer">
@@ -303,17 +404,17 @@ export default function EmailTable() {
                     ) : (
                       <span className="badge-sin-procesar inline-flex items-center px-2 py-1 rounded text-xs">Sin procesar</span>
                     )}
-                    {e.category ? (
+                    {e.metadata?.category ? (
                       <span className={`inline-flex items-center px-2 py-1 rounded text-xs ${
-                        e.category === "cliente"
+                        e.metadata.category === "cliente"
                           ? "badge-categoria-cliente"
-                          : e.category === "lead"
+                          : e.metadata.category === "lead"
                           ? "badge-categoria-lead"
-                          : e.category === "interno"
+                          : e.metadata.category === "interno"
                           ? "badge-categoria-interno"
                           : "badge-categoria-spam"
                       }`}>
-                        {e.category}
+                        {e.metadata.category}
                       </span>
                     ) : null}
                   </div>
@@ -353,16 +454,6 @@ export default function EmailTable() {
           </>
         )}
       </div>
-
-      {/* Estado de búsqueda sin resultados */}
-      {total > 0 && pageData.length === 0 ? (
-        <div className="card-base p-6">
-          <EmptyState
-            title="No se encontraron emails con ese criterio"
-            description="Intenta ajustar la búsqueda o filtros."
-          />
-        </div>
-      ) : null}
     </div>
   );
 }

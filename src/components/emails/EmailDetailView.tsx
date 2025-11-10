@@ -3,10 +3,11 @@
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Mail, CalendarDays, Tag, AlertCircle, CheckCircle, Edit3, Archive, ShieldAlert, KanbanSquare } from "lucide-react";
 import Button from "@/components/ui/button";
-import type { EmailMock } from "@/lib/mock-data/emails";
+import { updateEmail } from "@/actions/emails";
+import { EmailWithMetadata } from "@/types";
 
 type EmailDetailViewProps = {
-  email: EmailMock;
+  email: EmailWithMetadata;
   onBack?: () => void;
 };
 
@@ -28,7 +29,64 @@ export default function EmailDetailView({ email, onBack }: EmailDetailViewProps)
     else router.push("/emails");
   };
 
-  const toast = (msg: string) => alert(msg);
+  const handleEditMetadata = async () => {
+    try {
+      const result = await updateEmail(email.id, {
+        processed: !email.processed,
+        metadata: {
+          category: email.metadata?.category ?? null,
+          priority: email.metadata?.priority ?? null,
+          hasTask: email.metadata?.hasTask ?? false,
+          taskDescription: email.metadata?.taskDescription ?? null,
+          taskStatus: email.metadata?.taskStatus ?? null
+        }
+      });
+
+      if (result.success) {
+        alert("Metadata actualizada correctamente");
+        window.location.reload(); // Recargar para ver los cambios
+      } else {
+        alert(`Error: ${result.error}`);
+      }
+    } catch (error) {
+      alert("Error al actualizar metadata");
+      console.error("Error updating email:", error);
+    }
+  };
+
+  const handleMarkAsSpam = async () => {
+    try {
+      const result = await updateEmail(email.id, {
+        metadata: {
+          category: "spam",
+          priority: "baja",
+          hasTask: false,
+          taskDescription: null,
+          taskStatus: null
+        }
+      });
+
+      if (result.success) {
+        alert("Email marcado como spam");
+        router.push("/emails");
+      } else {
+        alert(`Error: ${result.error}`);
+      }
+    } catch (error) {
+      alert("Error al marcar como spam");
+      console.error("Error marking as spam:", error);
+    }
+  };
+
+  const handleArchive = async () => {
+    try {
+      // Por ahora simulamos el archivado
+      alert("Funcionalidad de archivado disponible en futuras versiones");
+    } catch (error) {
+      alert("Error al archivar email");
+      console.error("Error archiving email:", error);
+    }
+  };
 
   return (
     <section className="space-y-4">
@@ -51,7 +109,7 @@ export default function EmailDetailView({ email, onBack }: EmailDetailViewProps)
             <span className="mx-2">•</span>
             <CalendarDays className="w-4 h-4" aria-hidden />
             <span className="whitespace-nowrap">
-              {new Date(email.receivedAt).toLocaleString("es-CO", {
+              {email.receivedAt.toLocaleString("es-CO", {
                 year: "numeric",
                 month: "short",
                 day: "2-digit",
@@ -81,7 +139,7 @@ export default function EmailDetailView({ email, onBack }: EmailDetailViewProps)
       <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
-          onClick={() => toast("Funcionalidad disponible en Semana 2")}
+          onClick={handleEditMetadata}
           variant="secondary"
           size="md"
           leftIcon={<Edit3 className="w-4 h-4" aria-hidden />}
@@ -91,7 +149,7 @@ export default function EmailDetailView({ email, onBack }: EmailDetailViewProps)
 
         <Button
           type="button"
-          onClick={() => toast("Funcionalidad disponible en Semana 2")}
+          onClick={handleMarkAsSpam}
           variant="destructive"
           size="md"
           leftIcon={<ShieldAlert className="w-4 h-4" aria-hidden />}
@@ -101,7 +159,7 @@ export default function EmailDetailView({ email, onBack }: EmailDetailViewProps)
 
         <Button
           type="button"
-          onClick={() => toast("Funcionalidad disponible en Semana 2")}
+          onClick={handleArchive}
           variant="outline"
           size="md"
           leftIcon={<Archive className="w-4 h-4" aria-hidden />}
@@ -109,7 +167,7 @@ export default function EmailDetailView({ email, onBack }: EmailDetailViewProps)
           Archivar
         </Button>
 
-        {email.hasTask ? (
+        {email.metadata?.hasTask ? (
           <Button
             type="button"
             onClick={() => router.push("/kanban")}
@@ -137,20 +195,20 @@ export default function EmailDetailView({ email, onBack }: EmailDetailViewProps)
             Aún sin procesar
           </span>
         )}
-        {email.category ? (
+        {email.metadata?.category ? (
           <span
             className={`inline-flex items-center gap-1 px-2 py-1 rounded ${
-              email.category === "cliente"
+              email.metadata.category === "cliente"
                 ? "badge-categoria-cliente"
-                : email.category === "lead"
+                : email.metadata.category === "lead"
                 ? "badge-categoria-lead"
-                : email.category === "interno"
+                : email.metadata.category === "interno"
                 ? "badge-categoria-interno"
                 : "badge-categoria-spam"
             }`}
           >
             <Tag className="w-3 h-3" aria-hidden />
-            {email.category}
+            {email.metadata.category}
           </span>
         ) : null}
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import type { EmailMock } from "@/lib/mock-data/emails";
+import { EmailWithMetadata } from "@/types";
 import TaskCard from "./TaskCard";
 import { Circle, Clock, CheckCircle } from "lucide-react";
 
@@ -17,7 +17,7 @@ export default function KanbanColumn({
   status,
 }: {
   title: string;
-  tasks: EmailMock[];
+  tasks: EmailWithMetadata[];
   status: "todo" | "doing" | "done";
 }) {
   const Icon =

@@ -1,7 +1,7 @@
 "use client";
 
 import { BadgeCheck, AlertTriangle, ClipboardList, ChevronDown, ChevronUp, Tag, Activity } from "lucide-react";
-import type { EmailMock } from "@/lib/mock-data/emails";
+import { EmailWithMetadata } from "@/types";
 import { useState } from "react";
 import Button from "@/components/ui/button";
 
@@ -22,30 +22,36 @@ import Button from "@/components/ui/button";
  */
 
 type Props = {
-  email: EmailMock;
+  email: EmailWithMetadata;
 };
 
 export default function EmailMetadataSidebar({ email }: Props) {
   // Estado simulado para dropdown (no persiste por requerimientos de Semana 1)
   const [openTaskState, setOpenTaskState] = useState(false);
 
+  const categoria = email.metadata?.category;
+  const prioridad = email.metadata?.priority;
+  const hasTask = email.metadata?.hasTask || false;
+  const taskDescription = email.metadata?.taskDescription;
+  const taskStatus = email.metadata?.taskStatus;
+
   const categoriaClass =
-    email.category === "cliente"
+    categoria === "cliente"
       ? "badge-categoria-cliente"
-      : email.category === "lead"
+      : categoria === "lead"
       ? "badge-categoria-lead"
-      : email.category === "interno"
+      : categoria === "interno"
       ? "badge-categoria-interno"
-      : email.category === "spam"
+      : categoria === "spam"
       ? "badge-categoria-spam"
       : "";
 
   const prioridadClass =
-    email.priority === "alta"
+    prioridad === "alta"
       ? "badge-prioridad-alta"
-      : email.priority === "media"
+      : prioridad === "media"
       ? "badge-prioridad-media"
-      : email.priority === "baja"
+      : prioridad === "baja"
       ? "badge-prioridad-baja"
       : "";
 
@@ -93,9 +99,9 @@ export default function EmailMetadataSidebar({ email }: Props) {
           Categoría
         </h3>
         <div>
-          {email.category ? (
+          {categoria ? (
             <span className={`inline-flex items-center px-2 py-1 rounded text-xs ${categoriaClass}`}>
-              {email.category}
+              {categoria}
             </span>
           ) : (
             <span className="text-xs text-[color:var(--color-text-muted)]">Sin categoría</span>
@@ -109,9 +115,9 @@ export default function EmailMetadataSidebar({ email }: Props) {
           Prioridad
         </h3>
         <div>
-          {email.priority ? (
+          {prioridad ? (
             <span className={`inline-flex items-center px-2 py-1 rounded text-xs ${prioridadClass}`}>
-              {email.priority}
+              {prioridad}
             </span>
           ) : (
             <span className="text-xs text-[color:var(--color-text-muted)]">Sin prioridad</span>
@@ -126,14 +132,14 @@ export default function EmailMetadataSidebar({ email }: Props) {
           Tarea Detectada
         </h3>
 
-        {!email.hasTask ? (
+        {!hasTask ? (
           <div className="text-xs text-[color:var(--color-text-muted)]">
             No se detectó ninguna tarea en este email.
           </div>
         ) : (
           <>
             <div className="text-sm text-[color:var(--color-text-primary)]">
-              {email.taskDescription}
+              {taskDescription}
             </div>
 
             {/* Estado de tarea: dropdown simulado (sin persistencia) */}
@@ -158,11 +164,11 @@ export default function EmailMetadataSidebar({ email }: Props) {
                 <span>
                   Estado:{" "}
                   <strong>
-                    {email.taskStatus === "todo"
+                    {taskStatus === "todo"
                       ? "Por hacer"
-                      : email.taskStatus === "doing"
+                      : taskStatus === "doing"
                       ? "En progreso"
-                      : email.taskStatus === "done"
+                      : taskStatus === "done"
                       ? "Completado"
                       : "—"}
                   </strong>
@@ -179,7 +185,7 @@ export default function EmailMetadataSidebar({ email }: Props) {
                 <li
                   className="px-3 py-2 hover:bg-[color:var(--color-bg-hover)] cursor-default"
                   role="option"
-                  aria-selected={email.taskStatus === "todo"}
+                  aria-selected={taskStatus === "todo"}
                   onClick={() => setOpenTaskState(false)}
                   title="Simulado: no persiste valor"
                 >
@@ -188,7 +194,7 @@ export default function EmailMetadataSidebar({ email }: Props) {
                 <li
                   className="px-3 py-2 hover:bg-[color:var(--color-bg-hover)] cursor-default"
                   role="option"
-                  aria-selected={email.taskStatus === "doing"}
+                  aria-selected={taskStatus === "doing"}
                   onClick={() => setOpenTaskState(false)}
                   title="Simulado: no persiste valor"
                 >
@@ -197,7 +203,7 @@ export default function EmailMetadataSidebar({ email }: Props) {
                 <li
                   className="px-3 py-2 hover:bg-[color:var(--color-bg-hover)] cursor-default"
                   role="option"
-                  aria-selected={email.taskStatus === "done"}
+                  aria-selected={taskStatus === "done"}
                   onClick={() => setOpenTaskState(false)}
                   title="Simulado: no persiste valor"
                 >
