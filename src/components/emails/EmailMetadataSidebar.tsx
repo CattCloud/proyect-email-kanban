@@ -13,7 +13,7 @@ import Button from "@/components/ui/button";
  *   • Prioridad (Alta/Media/Baja) con badge de color
  *   • Tarea Detectada (si hasTask)
  *   • Estado de Tarea (dropdown simulado, sin persistencia)
- * - Si email.processed === false: muestra alerta con acción deshabilitada
+ * - Si email.processedAt === null: muestra alerta con acción deshabilitada
  *
  * Estilos desde src/app/globals.css:
  *  - badge-procesado, badge-sin-procesar
@@ -67,7 +67,7 @@ export default function EmailMetadataSidebar({ email }: Props) {
           Estado de procesamiento
         </h3>
         <div>
-          {email.processed ? (
+          {email.processedAt !== null ? (
             <span className="badge-procesado inline-flex items-center gap-1 px-2 py-1 rounded text-xs">
               <BadgeCheck className="w-3 h-3" aria-hidden />
               Procesado por IA

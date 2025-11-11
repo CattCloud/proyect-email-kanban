@@ -1,0 +1,11 @@
+-- CreateEnum
+CREATE TYPE "public"."emailPriority" AS ENUM ('alta', 'media', 'baja');
+
+-- AlterTable
+ALTER TABLE "public"."email" ADD COLUMN     "idEmail" TEXT NOT NULL;
+
+-- CreateIndex
+CREATE UNIQUE INDEX "email_idEmail_key" ON "public"."email"("idEmail");
+
+-- CreateIndex
+CREATE INDEX "email_idEmail_idx" ON "public"."email"("idEmail");

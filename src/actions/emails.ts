@@ -4,13 +4,22 @@ import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
-// Zod schemas para validación
 const EmailSchema = z.object({
   from: z.string().email("Email inválido"),
   subject: z.string().min(1, "El asunto es requerido"),
   body: z.string().min(1, "El contenido es requerido"),
   receivedAt: z.string().optional(),
-  processed: z.boolean().default(false)
+  processedAt: z.string().optional().nullable()
+})
+
+// Schema para Email con idEmail
+const EmailWithIdSchema = z.object({
+  idEmail: z.string().min(1, "El ID del email es requerido"),
+  from: z.string().email("Email inválido"),
+  subject: z.string().min(1, "El asunto es requerido"),
+  body: z.string().min(1, "El contenido es requerido"),
+  receivedAt: z.string().optional(),
+  processedAt: z.string().optional().nullable()
 })
 
 const EmailMetadataSchema = z.object({
@@ -23,6 +32,7 @@ const EmailMetadataSchema = z.object({
 
 const CreateEmailSchema = z.object({
   email: EmailSchema,
+  idEmail: z.string().min(1, "El ID del email es requerido"),
   metadata: EmailMetadataSchema.optional()
 })
 
@@ -30,8 +40,9 @@ const UpdateEmailSchema = z.object({
   from: z.string().email("Email inválido").optional(),
   subject: z.string().min(1, "El asunto es requerido").optional(),
   body: z.string().min(1, "El contenido es requerido").optional(),
-  processed: z.boolean().optional(),
-  metadata: EmailMetadataSchema.optional()
+  processedAt: z.string().nullable().optional(),
+  metadata: EmailMetadataSchema.optional(),
+  idEmail: z.string().min(1, "El ID del email es requerido").optional()
 })
 
 // Tipos exportados
@@ -40,9 +51,9 @@ export type EmailMetadataData = z.infer<typeof EmailMetadataSchema>
 export type CreateEmailData = z.infer<typeof CreateEmailSchema>
 export type UpdateEmailData = z.infer<typeof UpdateEmailSchema>
 
-// Schema para validación de importación JSON (Product Brief)
+// Schema para validación de importación JSON (Product Brief actualizado)
 const ImportEmailSchema = z.object({
-  id: z.string().optional(), // Se ignora (auto-generado)
+  id: z.string().min(1, "El ID del email es requerido"), // Ahora es requerido
   email: z.string().email("Email inválido"),
   received_at: z.string().optional(),
   subject: z.string().min(1, "El asunto es requerido"),
@@ -132,13 +143,14 @@ export async function createEmail(data: CreateEmailData) {
     // Crear email
     const email = await prisma.email.create({
       data: {
+        idEmail: validatedData.idEmail,
         from: validatedData.email.from,
         subject: validatedData.email.subject,
         body: validatedData.email.body,
-        receivedAt: validatedData.email.receivedAt ? 
-          new Date(validatedData.email.receivedAt) : 
+        receivedAt: validatedData.email.receivedAt ?
+          new Date(validatedData.email.receivedAt) :
           new Date(),
-        processed: validatedData.email.processed,
+        processedAt: (validatedData.email.processedAt && new Date(validatedData.email.processedAt)) ?? null, // Null = no procesado
         metadata: validatedData.metadata ? {
           create: validatedData.metadata
         } : undefined
@@ -184,10 +196,11 @@ export async function updateEmail(id: string, data: UpdateEmailData) {
     const updatedEmail = await prisma.email.update({
       where: { id },
       data: {
+        ...(validatedData.idEmail && { idEmail: validatedData.idEmail }),
         ...(validatedData.from && { from: validatedData.from }),
         ...(validatedData.subject && { subject: validatedData.subject }),
         ...(validatedData.body && { body: validatedData.body }),
-        ...(validatedData.processed !== undefined && { processed: validatedData.processed }),
+        ...(validatedData.processedAt !== undefined && { processedAt: validatedData.processedAt }),
         // Actualizar metadata si se proporciona
         ...(validatedData.metadata && {
           metadata: existingEmail.metadata ? {
@@ -349,13 +362,14 @@ export async function importEmailsFromJSON(jsonData: string): Promise<ImportResu
               // Crear email (mapeo: Product Brief -> Base de datos)
               const email = await tx.email.create({
                 data: {
+                  idEmail: emailData.id,        // id del JSON -> idEmail de BD
                   from: emailData.email,        // email -> from
                   subject: emailData.subject,
                   body: emailData.body,
                   receivedAt: emailData.received_at ?
                     new Date(emailData.received_at) :  // received_at -> receivedAt
                     new Date(),
-                  processed: false  // Por defecto false (sin procesar con IA)
+                  processedAt: null  // Por defecto null (sin procesar con IA)
                   // Nota: EmailMetadata no se crea inicialmente
                   // Se creará cuando se procese con IA posteriormente
                 }

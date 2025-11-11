@@ -9,17 +9,21 @@ datasource db {
 
 model Email {
   id         String         @id @default(cuid())
+  idEmail    String         @unique // ID externo del email (del JSON)
   from       String
   subject    String
   body       String
   receivedAt DateTime       @default(now())
-  processed  Boolean        @default(false)
+  createdAt  DateTime       @default(now()) // Fecha de importación del email
+  processedAt DateTime?     // Null = no procesado, fecha = procesado en esa fecha
   metadata   EmailMetadata?
 
   @@index([from])
   @@index([subject])
-  @@index([processed])
+  @@index([processedAt])
   @@index([receivedAt])
+  @@index([createdAt])
+  @@index([idEmail])
 }
 
 model EmailMetadata {
@@ -31,7 +35,12 @@ model EmailMetadata {
   taskDescription String?
   taskStatus      String?
   email           Email   @relation(fields: [emailId], references: [id], onDelete: Cascade)
-
+  /*
+   Una tabla de tareas porque un email puede tener multiples tareas
+   Una tabla de categorias y prioridades predefinidas?
+   Un tabla de personas
+  */
+  
   @@index([category])
   @@index([priority])
   @@index([hasTask])

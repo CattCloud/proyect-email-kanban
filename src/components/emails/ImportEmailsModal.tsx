@@ -11,6 +11,7 @@ import { useDropzone } from "react-dropzone";
 type Step = "idle" | "preview" | "importing" | "result";
 
 interface PreviewItem {
+  id: string;  // ID del JSON
   from: string;
   subject: string;
   body?: string;
@@ -40,12 +41,14 @@ export default function ImportEmailsModal({ onImported }: ImportEmailsModalProps
 
   const exampleJSON = `[
   {
+    "id": "email-001",
     "email": "cliente@empresa.com",
     "received_at": "2024-11-01T09:15:00Z",
     "subject": "Reunión urgente - Propuesta Q4",
     "body": "Necesito que revisemos la propuesta..."
   },
   {
+    "id": "email-002",
     "email": "otro@cliente.com",
     "subject": "Consulta sobre servicios",
     "body": "Me gustaría conocer más detalles..."
@@ -117,6 +120,7 @@ export default function ImportEmailsModal({ onImported }: ImportEmailsModalProps
 
       // Mapeo para vista previa: Product Brief -> formato interno
       const simplified: PreviewItem[] = parsed.slice(0, 5).map((it: Record<string, unknown>) => ({
+        id: typeof it.id === "string" ? it.id : "(sin ID)",
         from: typeof it.email === "string" ? it.email : "(sin remitente)",
         subject: typeof it.subject === "string" ? it.subject : "(sin asunto)",
         body: typeof it.body === "string" ? it.body : undefined,
@@ -164,6 +168,19 @@ export default function ImportEmailsModal({ onImported }: ImportEmailsModalProps
       const res = await importEmailsFromJSON(jsonText);
       setResult(res);
       setStep("result");
+      
+      // Si la importación fue exitosa (aunque con algunos errores), cerrar modal automáticamente
+      if (res.imported > 0) {
+        // Notificar al componente padre sobre la importación exitosa
+        if (onImported) {
+          onImported(res);
+        }
+        
+        // Cerrar modal después de 2 segundos para mostrar el resultado
+        setTimeout(() => {
+          closeModal();
+        }, 2000);
+      }
     } catch {
       setResult({
         success: false,
@@ -172,6 +189,7 @@ export default function ImportEmailsModal({ onImported }: ImportEmailsModalProps
         total: totalItems,
       });
       setStep("result");
+      // En caso de error, mantener modal abierto para que usuario pueda reintentar
     } finally {
       setLoading(false);
     }
@@ -246,12 +264,13 @@ export default function ImportEmailsModal({ onImported }: ImportEmailsModalProps
                     role="button"
                     tabIndex={0}
                     aria-label="Arrastra tu archivo JSON aquí o haz clic para seleccionarlo"
-                    className={`rounded-md border-2 ${isDragActive ? "border-[color:var(--color-primary-500)] bg-[color:var(--color-bg-muted)]" : "border-[color:var(--color-border-light)]"} border-dashed p-6 text-center transition-colors`}
-                    onClick={(e) => { e.preventDefault(); openFileDialog(); }}
+                    className={`rounded-md border-2 ${isDragActive ? "border-[color:var(--color-primary-500)] bg-[color:var(--color-bg-muted)]" : "border-[color:var(--color-border-light)]"} border-dashed p-6 text-center transition-colors cursor-pointer`}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        openFileDialog();
+                        // Trigger input click programmatically to avoid multiple dialogs
+                        const input = document.querySelector('input[type="file"][aria-label="Seleccionar archivo JSON para importación"]') as HTMLInputElement;
+                        if (input) input.click();
                       }
                     }}
                   >
@@ -271,7 +290,12 @@ export default function ImportEmailsModal({ onImported }: ImportEmailsModalProps
                       <div className="mt-2">
                         <Button
                           variant="outline"
-                          onClick={(e) => { e.preventDefault(); openFileDialog(); }}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            // Trigger input click programmatically to avoid multiple dialogs
+                            const input = document.querySelector('input[type="file"][aria-label="Seleccionar archivo JSON para importación"]') as HTMLInputElement;
+                            if (input) input.click();
+                          }}
                           leftIcon={<Upload className="w-4 h-4" />}
                           aria-label="Seleccionar archivo desde el explorador"
                         >
@@ -295,7 +319,8 @@ export default function ImportEmailsModal({ onImported }: ImportEmailsModalProps
                     <div className="px-4 pb-2">
                       <div className="flex items-center justify-between gap-2">
                         <div className="text-[length:var(--font-size-xs)] text-[color:var(--color-text-muted)]">
-                          Campos requeridos: email, subject, body • Opcional: received_at • El campo &quot;id&quot; se ignora si se incluye
+                          Campos requeridos: id, email, subject, body 
+                          • Opcional: received_at 
                         </div>
                         <Button
                           variant="outline"
@@ -366,9 +391,17 @@ export default function ImportEmailsModal({ onImported }: ImportEmailsModalProps
                     ) : (
                       <AlertCircle className="w-5 h-5 text-[color:var(--color-error)]" />
                     )}
-                    <p className="text-[length:var(--font-size-sm)] text-[color:var(--color-text-primary)]">
-                      {result.imported} importados de {result.total}. {result.errors.length} errores.
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-[length:var(--font-size-sm)] text-[color:var(--color-text-primary)]">
+                        {result.imported} importados de {result.total}
+                      </p>
+                      {result.errors.length > 0 && (
+                        <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-[color:var(--color-error-bg)] text-[color:var(--color-error-text)] border border-[color:var(--color-error-border)]">
+                          {result.errors.length} errores
+                        </span>
+                      )}
+                      <p className="text-[length:var(--font-size-sm)] text-[color:var(--color-text-primary)]">.</p>
+                    </div>
                   </div>
 
                   {result.errors.length > 0 && (
@@ -379,13 +412,24 @@ export default function ImportEmailsModal({ onImported }: ImportEmailsModalProps
                         </p>
                       </div>
                       <div className="max-h-60 overflow-auto p-4 scrollbar-thin">
-                        <ul className="space-y-2">
+                        <div className="grid grid-cols-1 gap-2">
                           {result.errors.slice(0, 25).map((e, i) => (
-                            <li key={i} className="text-[length:var(--font-size-xs)] text-[color:var(--color-error-text)]">
-                              #{e.index + 1}: {e.email ?? "(sin asunto)"} — {e.error}
-                            </li>
+                            <div
+                              key={i}
+                              className="flex items-start gap-2 p-2 rounded-md border border-[color:var(--color-border-error)] bg-[color:var(--color-error-bg)]"
+                            >
+                              <AlertCircle className="w-3 h-3 mt-0.5 text-[color:var(--color-error-text)]" />
+                              <div className="flex-1 min-w-0">
+                                <div className="text-[length:var(--font-size-xs)] text-[color:var(--color-error-text)] font-medium">
+                                  Email #{e.index + 1}
+                                </div>
+                                <div className="text-[length:var(--font-size-xs)] text-[color:var(--color-error-text)] opacity-80">
+                                  {e.email ?? "(sin asunto)"} — {e.error}
+                                </div>
+                              </div>
+                            </div>
                           ))}
-                        </ul>
+                        </div>
                       </div>
                     </div>
                   )}

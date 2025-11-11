@@ -65,7 +65,7 @@ export default function DashboardPage() {
         const allEmailsResult = await getEmails();
         if (allEmailsResult.success && allEmailsResult.data) {
           const total = allEmailsResult.data.length;
-          const unprocessed = allEmailsResult.data.filter(e => !e.processed).length;
+          const unprocessed = allEmailsResult.data.filter(e => e.processedAt === null).length;
 
           setMetrics(prev => ({
             ...prev,

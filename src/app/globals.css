@@ -756,6 +756,36 @@
     color: var(--color-sin-procesar-text);
   }
 
+  .badge-email-nuevo {
+    background-color: var(--color-primary-100);
+    color: var(--color-primary-800);
+    border: 1px solid var(--color-primary-300);
+    font-weight: var(--font-weight-medium);
+  }
+
+  /* ============================================
+   * EMAIL NUEVO - Resaltado de fila
+   * ============================================ */
+  .email-row-nuevo {
+    background-color: var(--color-primary-50);
+    border-left: 4px solid var(--color-primary-500);
+  }
+
+  .email-row-nuevo:hover {
+    background-color: var(--color-primary-100);
+    border-left: 4px solid var(--color-primary-600);
+  }
+
+  .email-card-nuevo {
+    border: 2px solid var(--color-primary-300);
+    background-color: var(--color-primary-50);
+  }
+
+  .email-card-nuevo:hover {
+    border-color: var(--color-primary-500);
+    background-color: var(--color-primary-100);
+  }
+
   /* ============================================
    * CARDS - Estilos de tarjetas
    * ============================================ */

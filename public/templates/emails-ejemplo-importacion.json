@@ -1,0 +1,37 @@
+[
+  {
+    "id": "email-001",
+    "email": "cliente@empresa.com",
+    "received_at": "2024-11-01T09:15:00Z",
+    "subject": "Reunión urgente - Propuesta Q4",
+    "body": "Necesito que revisemos la propuesta para el Q4. El cliente está esperando nuestra respuesta urgente para poder cerrar el acuerdo antes del fin del mes."
+  },
+  {
+    "id": "email-002",
+    "email": "lead@startup.com",
+    "received_at": "2024-11-02T11:30:00Z",
+    "subject": "Consulta sobre servicios",
+    "body": "Somos una startup en crecimiento de 50 empleados y estamos interesados en conocer más sobre sus servicios de consultoría. ¿Podrían enviarnos una propuesta?"
+  },
+  {
+    "id": "email-003",
+    "email": "equipo@empresa.com",
+    "received_at": "2024-11-03T14:22:00Z",
+    "subject": "Reunión semanal del equipo",
+    "body": "Recordatorio: mañana viernes a las 10:00 AM tendremos la reunión semanal del equipo para revisar el progreso del proyecto y planificar la siguiente semana."
+  },
+  {
+    "id": "email-004",
+    "email": "soporte@tech.com",
+    "received_at": "2024-11-04T16:45:00Z",
+    "subject": "Mantenimiento programado del sistema",
+    "body": "Te informamos que el sábado 9 de noviembre tendremos un mantenimiento programado del sistema de 2:00 AM a 4:00 AM. Durante este tiempo el sistema no estará disponible."
+  },
+  {
+    "id": "email-005",
+    "email": "marketing@empresa.com",
+    "received_at": "2024-11-05T08:10:00Z",
+    "subject": "Campaña de email marketing",
+    "body": "Lanzamos nuestra nueva campaña de email marketing. Necesitamos tu aprobación para los diseños antes de enviar a la lista de clientes potenciales."
+  }
+]

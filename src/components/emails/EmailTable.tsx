@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronUp, Sparkles, RefreshCw } from "lucide-react";
 import SearchBar from "@/components/shared/SearchBar";
@@ -33,7 +33,16 @@ const PAGE_SIZE = 10;
 type ServerEmail = PrismaEmail & {
   metadata: PrismaEmailMetadata | null;
   receivedAt: string | Date;
+  createdAt: string | Date;
 };
+
+// Función para determinar si un email es "nuevo" (importado en los últimos 5 minutos)
+function isNewEmail(createdAt: string | Date): boolean {
+  const now = new Date().getTime();
+  const created = new Date(createdAt).getTime();
+  const fiveMinutesInMs = 5 * 60 * 1000;
+  return (now - created) < fiveMinutesInMs;
+}
 
 function formatRelative(iso: string): string {
   const now = new Date().getTime();
@@ -70,52 +79,53 @@ export default function EmailTable() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Función para recargar emails (reutilizable)
+  const reloadEmails = useCallback(async () => {
+    const reqId = ++requestIdRef.current;
+    try {
+      setLoading(true);
+      setError(null);
+      const result = await getEmails();
+      if (requestIdRef.current !== reqId) return;
+
+      if (result.success) {
+        const raw = Array.isArray(result.data) ? (result.data as ServerEmail[]) : [];
+        console.log("Emails cargados (raw):", raw);
+        const normalized: EmailWithMetadata[] = raw.map((e) => {
+          const d = e.receivedAt instanceof Date ? e.receivedAt : new Date(e.receivedAt);
+          const safeDate = isNaN(d.getTime()) ? new Date(0) : d;
+          const cd = e.createdAt instanceof Date ? e.createdAt : new Date(e.createdAt);
+          const safeCreatedAt = isNaN(cd.getTime()) ? new Date(0) : cd;
+          return {
+            ...(e as unknown as EmailWithMetadata),
+            receivedAt: safeDate,
+            createdAt: safeCreatedAt,
+            metadata: e.metadata ?? null,
+          };
+        });
+        console.log("Emails normalizados:", normalized);
+        setEmails(normalized);
+      } else {
+        setError(result.error || "Error al cargar los emails");
+      }
+    } catch (err) {
+      if (requestIdRef.current !== reqId) return;
+      setError("Error de conexión al servidor");
+      console.error("Error loading emails:", err);
+    } finally {
+      if (requestIdRef.current !== reqId) return;
+      setLoading(false);
+    }
+  }, []);
+
   // Cargar emails desde Server Actions con control de concurrencia
   useEffect(() => {
-    const reqId = ++requestIdRef.current;
-    let cancelled = false;
-    async function loadEmails() {
-      try {
-        setLoading(true);
-        setError(null);
-        const result = await getEmails();
-        if (cancelled || requestIdRef.current !== reqId) return;
-
-        if (result.success) {
-          const raw = Array.isArray(result.data) ? (result.data as ServerEmail[]) : [];
-          console.log("Emails cargados (raw):", raw);
-          const normalized: EmailWithMetadata[] = raw.map((e) => {
-            const d = e.receivedAt instanceof Date ? e.receivedAt : new Date(e.receivedAt);
-            const safeDate = isNaN(d.getTime()) ? new Date(0) : d;
-            return {
-              ...(e as unknown as EmailWithMetadata),
-              receivedAt: safeDate,
-              metadata: e.metadata ?? null,
-            };
-          });
-          console.log("Emails normalizados:", normalized);
-          setEmails(normalized);
-        } else {
-          setError(result.error || "Error al cargar los emails");
-        }
-      } catch (err) {
-        if (cancelled || requestIdRef.current !== reqId) return;
-        setError("Error de conexión al servidor");
-        console.error("Error loading emails:", err);
-      } finally {
-        if (cancelled || requestIdRef.current !== reqId) return;
-        setLoading(false);
-      }
-    }
-
-    loadEmails();
-
+    reloadEmails();
     return () => {
-      cancelled = true;
       // Invalida cualquier respuesta tardía de esta instancia
       requestIdRef.current++;
     };
-  }, []); // Se ejecuta solo al montar el componente
+  }, [reloadEmails]); // Se ejecuta solo al montar el componente
 
   // Derivados
   const selectedCount = useMemo(() => Object.values(selected).filter(Boolean).length, [selected]);
@@ -126,7 +136,7 @@ export default function EmailTable() {
 
     // Filtro por estado (procesado / sin procesar)
     if (filterEstado !== "todos") {
-      data = data.filter(e => (filterEstado === "procesado" ? e.processed : !e.processed));
+      data = data.filter(e => (filterEstado === "procesado" ? e.processedAt !== null : e.processedAt === null));
     }
     // Filtro por categoría
     if (filterCategoria !== "todas") {
@@ -140,11 +150,19 @@ export default function EmailTable() {
         e.subject.toLowerCase().includes(q)
       );
     }
-    // Ordenamiento por fecha
+    // DOBLE ORDENAMIENTO: Primario por receivedAt, Secundario por createdAt
     data.sort((a, b) => {
       const da = a.receivedAt.getTime();
       const db = b.receivedAt.getTime();
-      return sortDir === "asc" ? da - db : db - da;
+      
+      // Ordenamiento primario: receivedAt
+      const receivedDiff = sortDir === "asc" ? da - db : db - da;
+      if (receivedDiff !== 0) return receivedDiff;
+      
+      // Ordenamiento secundario: createdAt (descendente por defecto para emails más recientes primero)
+      const ca = a.createdAt.getTime();
+      const cb = b.createdAt.getTime();
+      return cb - ca; // Siempre descendente para createdAt
     });
     return data;
   }, [emails, query, sortDir, filterEstado, filterCategoria]);
@@ -229,7 +247,7 @@ export default function EmailTable() {
           >
             Recargar
           </Button>
-          <ImportEmailsModal onImported={() => window.location.reload()} />
+          <ImportEmailsModal onImported={() => reloadEmails()} />
           <Button
             type="button"
             onClick={onProcessAI}
@@ -308,10 +326,10 @@ export default function EmailTable() {
             </Button>
           </div>
         ) : emails.length === 0 ? (
-          <div className="p-8 text-center">
+          <div className="p-8 text-center flex flex-col items-center justify-center">
             <div className="text-[color:var(--color-text-primary)] mb-4">No hay emails importados aún</div>
             <div className="text-[color:var(--color-text-secondary)] mb-6">Importa un archivo JSON para comenzar.</div>
-            <ImportEmailsModal onImported={() => window.location.reload()} />
+            <ImportEmailsModal onImported={() => reloadEmails()} />
           </div>
         ) : total === 0 ? (
           <div className="p-6">
@@ -355,7 +373,10 @@ export default function EmailTable() {
                 {pageData.map((e) => (
                   <tr
                     key={e.id}
-                    className="hover:bg-[color:var(--color-bg-hover)] cursor-pointer"
+                    className={isNewEmail(e.createdAt)
+                      ? "email-row-nuevo cursor-pointer"
+                      : "hover:bg-[color:var(--color-bg-hover)] cursor-pointer"
+                    }
                     onClick={() => onRowClick(e.id)}
                   >
                     <td className="py-3 pl-4 pr-2" onClick={(ev) => ev.stopPropagation()}>
@@ -372,11 +393,18 @@ export default function EmailTable() {
                     </td>
                     <td className="py-3 px-2 whitespace-nowrap">{formatRelative(e.receivedAt.toISOString())}</td>
                     <td className="py-3 px-2">
-                      {e.processed ? (
-                        <span className="badge-procesado inline-flex items-center px-2 py-1 rounded text-xs">Procesado</span>
-                      ) : (
-                        <span className="badge-sin-procesar inline-flex items-center px-2 py-1 rounded text-xs">Sin procesar</span>
-                      )}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* Badge "Nuevo" para emails importados recientemente */}
+                        {isNewEmail(e.createdAt) && (
+                          <span className="badge-email-nuevo inline-flex items-center px-2 py-1 rounded text-xs">Nuevo</span>
+                        )}
+                        {/* Badge de estado procesado/sin procesar */}
+                        {e.processedAt !== null ? (
+                          <span className="badge-procesado inline-flex items-center px-2 py-1 rounded text-xs">Procesado</span>
+                        ) : (
+                          <span className="badge-sin-procesar inline-flex items-center px-2 py-1 rounded text-xs">Sin procesar</span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -388,7 +416,7 @@ export default function EmailTable() {
               {pageData.map((e) => (
                 <div
                   key={e.id}
-                  className="email-card mb-2"
+                  className={`email-card mb-2 ${isNewEmail(e.createdAt) ? 'email-card-nuevo' : ''}`}
                   onClick={() => onRowClick(e.id)}
                   role="button"
                   aria-label={`Abrir ${e.subject}`}
@@ -399,11 +427,17 @@ export default function EmailTable() {
                   </div>
                   <div className="email-card-subject">{e.subject}</div>
                   <div className="email-card-footer">
-                    {e.processed ? (
+                    {/* Badge "Nuevo" para emails importados recientemente */}
+                    {isNewEmail(e.createdAt) && (
+                      <span className="badge-email-nuevo inline-flex items-center px-2 py-1 rounded text-xs">Nuevo</span>
+                    )}
+                    {/* Badge de estado procesado/sin procesar */}
+                    {e.processedAt !== null ? (
                       <span className="badge-procesado inline-flex items-center px-2 py-1 rounded text-xs">Procesado</span>
                     ) : (
                       <span className="badge-sin-procesar inline-flex items-center px-2 py-1 rounded text-xs">Sin procesar</span>
                     )}
+                    {/* Badge de categoría si existe */}
                     {e.metadata?.category ? (
                       <span className={`inline-flex items-center px-2 py-1 rounded text-xs ${
                         e.metadata.category === "cliente"
