@@ -1,3 +1,8 @@
 - Agregar plantillas
 - Mejora la vista y manejo de errores de la importacion de email
-
+- mockup del sistema de reportes (hecho)
+- mejorar frontend color scheme (diseño)
+- duplicacion de correos
+- logs de auditoria
+- code review interno
+- investigar llms gratuitos
