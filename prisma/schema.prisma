@@ -9,17 +9,21 @@ datasource db {
 
 model Email {
   id         String         @id @default(cuid())
+  idEmail    String         @unique // ID externo del email (del JSON)
   from       String
   subject    String
   body       String
   receivedAt DateTime       @default(now())
-  processed  Boolean        @default(false)
+  createdAt  DateTime       @default(now()) // Fecha de importación del email
+  processedAt DateTime?     // Null = no procesado, fecha = procesado en esa fecha
   metadata   EmailMetadata?
 
   @@index([from])
   @@index([subject])
-  @@index([processed])
+  @@index([processedAt])
   @@index([receivedAt])
+  @@index([createdAt])
+  @@index([idEmail])
 }
 
 model EmailMetadata {
@@ -27,13 +31,42 @@ model EmailMetadata {
   emailId         String  @unique
   category        String?
   priority        String?
+  summary         String?        // Resumen IA (5-100 chars)
+  contactName     String?        // Nombre de contacto inferido
   hasTask         Boolean @default(false)
   taskDescription String?
   taskStatus      String?
+  createdAt       DateTime @default(now())
   email           Email   @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  tasks           Task[]         // Relación 1:N con tareas extraídas por IA
 
   @@index([category])
   @@index([priority])
   @@index([hasTask])
   @@index([taskStatus])
+  @@index([emailId])
+  @@index([createdAt])
+  @@index([category, priority, hasTask, taskStatus])
+}
+
+model Task {
+  id              String         @id @default(cuid())
+  emailMetadataId String
+  emailMetadata   EmailMetadata  @relation(fields: [emailMetadataId], references: [id], onDelete: Cascade)
+  description     String
+  dueDate         DateTime?
+  tags            String[]       // etiquetas temáticas (máx 3 sugeridas por IA)
+  participants    String[]       // lista de emails involucrados
+  createdAt       DateTime       @default(now())
+  status          String         @default("todo") // 'todo' | 'doing' | 'done'
+
+  @@index([emailMetadataId])
+  @@index([status])
+}
+
+model Contact {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
 }

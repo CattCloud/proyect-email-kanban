@@ -1,13 +1,14 @@
 "use client";
 
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronUp, Sparkles, RefreshCw } from "lucide-react";
 import SearchBar from "@/components/shared/SearchBar";
-import EmptyState from "@/components/shared/EmptyState";
 import Button from "@/components/ui/button";
 import { getEmails } from "@/actions/emails";
 import ImportEmailsModal from "@/components/emails/ImportEmailsModal";
+import ProcessEmailsModal from "./ProcessEmailsModal";
+import { processEmailsWithAI } from "@/actions/ai-processing";
 import {
   EmailWithMetadata,
   EmailFilterEstado,
@@ -33,7 +34,16 @@ const PAGE_SIZE = 10;
 type ServerEmail = PrismaEmail & {
   metadata: PrismaEmailMetadata | null;
   receivedAt: string | Date;
+  createdAt: string | Date;
 };
+
+// Función para determinar si un email es "nuevo" (importado en los últimos 5 minutos)
+function isNewEmail(createdAt: string | Date): boolean {
+  const now = new Date().getTime();
+  const created = new Date(createdAt).getTime();
+  const fiveMinutesInMs = 5 * 60 * 1000;
+  return (now - created) < fiveMinutesInMs;
+}
 
 function formatRelative(iso: string): string {
   const now = new Date().getTime();
@@ -62,63 +72,72 @@ export default function EmailTable() {
   const [sortDir, setSortDir] = useState<SortDirection>("desc");
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [page, setPage] = useState(1);
-  const [filterEstado, setFilterEstado] = useState<EmailFilterEstado>("todos");
+  const [filterEstado, setFilterEstado] = useState<EmailFilterEstado>("sin-procesar");
   const [filterCategoria, setFilterCategoria] = useState<EmailFilterCategoria>("todas");
   
   // Data State
   const [emails, setEmails] = useState<EmailWithMetadata[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [processingIds, setProcessingIds] = useState<string[]>([]);
+  const [processing, setProcessing] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [resultSummary, setResultSummary] = useState<{
+    items: { id: string; subject: string; from: string; status: "success" | "error"; error?: string }[];
+  } | null>(null);
+
+  // Función para recargar emails (reutilizable)
+  const reloadEmails = useCallback(async () => {
+    const reqId = ++requestIdRef.current;
+    try {
+      setLoading(true);
+      setError(null);
+      const result = await getEmails();
+      if (requestIdRef.current !== reqId) return;
+
+      if (result.success) {
+        const raw = Array.isArray(result.data) ? (result.data as ServerEmail[]) : [];
+        const normalized: EmailWithMetadata[] = raw.map((e) => {
+          const d = e.receivedAt instanceof Date ? e.receivedAt : new Date(e.receivedAt);
+          const safeDate = isNaN(d.getTime()) ? new Date(0) : d;
+          const cd = e.createdAt instanceof Date ? e.createdAt : new Date(e.createdAt);
+          const safeCreatedAt = isNaN(cd.getTime()) ? new Date(0) : cd;
+          return {
+            ...(e as unknown as EmailWithMetadata),
+            receivedAt: safeDate,
+            createdAt: safeCreatedAt,
+            metadata: e.metadata ?? null,
+          };
+        });
+        setEmails(normalized);
+      } else {
+        setError(result.error || "Error al cargar los emails");
+      }
+    } catch (err) {
+      if (requestIdRef.current !== reqId) return;
+      setError("Error de conexión al servidor");
+      console.error("Error loading emails:", err);
+    } finally {
+      if (requestIdRef.current !== reqId) return;
+      setLoading(false);
+    }
+  }, []);
 
   // Cargar emails desde Server Actions con control de concurrencia
   useEffect(() => {
-    const reqId = ++requestIdRef.current;
-    let cancelled = false;
-    async function loadEmails() {
-      try {
-        setLoading(true);
-        setError(null);
-        const result = await getEmails();
-        if (cancelled || requestIdRef.current !== reqId) return;
-
-        if (result.success) {
-          const raw = Array.isArray(result.data) ? (result.data as ServerEmail[]) : [];
-          console.log("Emails cargados (raw):", raw);
-          const normalized: EmailWithMetadata[] = raw.map((e) => {
-            const d = e.receivedAt instanceof Date ? e.receivedAt : new Date(e.receivedAt);
-            const safeDate = isNaN(d.getTime()) ? new Date(0) : d;
-            return {
-              ...(e as unknown as EmailWithMetadata),
-              receivedAt: safeDate,
-              metadata: e.metadata ?? null,
-            };
-          });
-          console.log("Emails normalizados:", normalized);
-          setEmails(normalized);
-        } else {
-          setError(result.error || "Error al cargar los emails");
-        }
-      } catch (err) {
-        if (cancelled || requestIdRef.current !== reqId) return;
-        setError("Error de conexión al servidor");
-        console.error("Error loading emails:", err);
-      } finally {
-        if (cancelled || requestIdRef.current !== reqId) return;
-        setLoading(false);
-      }
-    }
-
-    loadEmails();
-
+    reloadEmails();
     return () => {
-      cancelled = true;
       // Invalida cualquier respuesta tardía de esta instancia
       requestIdRef.current++;
     };
-  }, []); // Se ejecuta solo al montar el componente
+  }, [reloadEmails]); // Se ejecuta solo al montar el componente
 
   // Derivados
-  const selectedCount = useMemo(() => Object.values(selected).filter(Boolean).length, [selected]);
+  const selectedIds = useMemo(() => Object.keys(selected).filter((id) => selected[id]), [selected]);
+  const selectedCount = selectedIds.length;
+  const isOverLimit = selectedCount > 10;
+  const selectedEmails = useMemo(() => emails.filter(e => selected[e.id]).slice(0, 10), [emails, selected]);
 
   // Filtrar por búsqueda, estado y categoría
   const filtered = useMemo(() => {
@@ -126,7 +145,7 @@ export default function EmailTable() {
 
     // Filtro por estado (procesado / sin procesar)
     if (filterEstado !== "todos") {
-      data = data.filter(e => (filterEstado === "procesado" ? e.processed : !e.processed));
+      data = data.filter(e => (filterEstado === "procesado" ? e.processedAt !== null : e.processedAt === null));
     }
     // Filtro por categoría
     if (filterCategoria !== "todas") {
@@ -140,11 +159,19 @@ export default function EmailTable() {
         e.subject.toLowerCase().includes(q)
       );
     }
-    // Ordenamiento por fecha
+    // DOBLE ORDENAMIENTO: Primario por receivedAt, Secundario por createdAt
     data.sort((a, b) => {
       const da = a.receivedAt.getTime();
       const db = b.receivedAt.getTime();
-      return sortDir === "asc" ? da - db : db - da;
+      
+      // Ordenamiento primario: receivedAt
+      const receivedDiff = sortDir === "asc" ? da - db : db - da;
+      if (receivedDiff !== 0) return receivedDiff;
+      
+      // Ordenamiento secundario: createdAt (descendente por defecto para emails más recientes primero)
+      const ca = a.createdAt.getTime();
+      const cb = b.createdAt.getTime();
+      return cb - ca; // Siempre descendente para createdAt
     });
     return data;
   }, [emails, query, sortDir, filterEstado, filterCategoria]);
@@ -161,15 +188,6 @@ export default function EmailTable() {
     setPage((p) => Math.min(Math.max(1, p), totalPages));
   }, [totalPages]);
 
-  // Debug logs
-  console.log("Debug - EmailTable:", {
-    emailsLength: emails.length,
-    filteredLength: filtered.length,
-    pageDataLength: pageData.length,
-    total,
-    loading,
-    error
-  });
 
   // Handlers
   function toggleSortByDate() {
@@ -184,14 +202,40 @@ export default function EmailTable() {
   function toggleSelectAllPage() {
     const all = isAllPageSelected();
     const next: Record<string, boolean> = { ...selected };
-    pageData.forEach(e => {
-      next[e.id] = !all;
-    });
+
+    if (all) {
+      // Deseleccionar todos en la página
+      pageData.forEach(e => {
+        next[e.id] = false;
+      });
+    } else {
+      // Seleccionar hasta completar el límite de 10
+      const currentCount = Object.values(next).filter(Boolean).length;
+      let remaining = Math.max(0, 10 - currentCount);
+      for (const e of pageData) {
+        if (!next[e.id] && remaining > 0) {
+          next[e.id] = true;
+          remaining--;
+        }
+      }
+    }
     setSelected(next);
   }
 
   function toggleSelect(id: string) {
-    setSelected(prev => ({ ...prev, [id]: !prev[id] }));
+    setSelected(prev => {
+      const next = { ...prev };
+      const currentlySelected = !!next[id];
+      if (!currentlySelected) {
+        const count = Object.values(next).filter(Boolean).length;
+        if (count >= 10) {
+          // Límite alcanzado: ignorar nuevos check
+          return prev;
+        }
+      }
+      next[id] = !currentlySelected;
+      return next;
+    });
   }
 
   function onRowClick(id: string) {
@@ -202,9 +246,11 @@ export default function EmailTable() {
     window.location.reload();
   }
 
-  function onProcessAI() {
-    if (selectedCount === 0) return;
-    alert(`Procesamiento con IA disponible en futuras versiones (seleccionados: ${selectedCount})`);
+  async function onProcessAI() {
+    if (selectedCount === 0 || isOverLimit) return;
+    setResultSummary(null);
+    setProgress(0);
+    setShowModal(true);
   }
 
   // Reset página cuando cambian filtros/búsqueda
@@ -229,18 +275,20 @@ export default function EmailTable() {
           >
             Recargar
           </Button>
-          <ImportEmailsModal onImported={() => window.location.reload()} />
-          <Button
-            type="button"
-            onClick={onProcessAI}
-            disabled={selectedCount === 0}
-            aria-label="Procesar con IA"
-            variant="primary"
-            size="md"
-            leftIcon={<Sparkles className="w-4 h-4" aria-hidden />}
-          >
-            Procesar con IA{selectedCount ? ` (${selectedCount})` : ""}
-          </Button>
+          <ImportEmailsModal onImported={() => reloadEmails()} />
+          {selectedCount > 0 && (
+            <Button
+              type="button"
+              onClick={onProcessAI}
+              disabled={isOverLimit}
+              aria-label="Procesar con IA"
+              variant="primary"
+              size="md"
+              leftIcon={<Sparkles className="w-4 h-4" aria-hidden />}
+            >
+              Procesar con IA ({Math.min(selectedCount, 10)}/10)
+            </Button>
+          )}
         </div>
       </div>
 
@@ -308,10 +356,10 @@ export default function EmailTable() {
             </Button>
           </div>
         ) : emails.length === 0 ? (
-          <div className="p-8 text-center">
+          <div className="p-8 text-center flex flex-col items-center justify-center">
             <div className="text-[color:var(--color-text-primary)] mb-4">No hay emails importados aún</div>
             <div className="text-[color:var(--color-text-secondary)] mb-6">Importa un archivo JSON para comenzar.</div>
-            <ImportEmailsModal onImported={() => window.location.reload()} />
+            <ImportEmailsModal onImported={() => reloadEmails()} />
           </div>
         ) : total === 0 ? (
           <div className="p-6">
@@ -355,7 +403,10 @@ export default function EmailTable() {
                 {pageData.map((e) => (
                   <tr
                     key={e.id}
-                    className="hover:bg-[color:var(--color-bg-hover)] cursor-pointer"
+                    className={isNewEmail(e.createdAt)
+                      ? "email-row-nuevo cursor-pointer"
+                      : "hover:bg-[color:var(--color-bg-hover)] cursor-pointer"
+                    }
                     onClick={() => onRowClick(e.id)}
                   >
                     <td className="py-3 pl-4 pr-2" onClick={(ev) => ev.stopPropagation()}>
@@ -372,11 +423,25 @@ export default function EmailTable() {
                     </td>
                     <td className="py-3 px-2 whitespace-nowrap">{formatRelative(e.receivedAt.toISOString())}</td>
                     <td className="py-3 px-2">
-                      {e.processed ? (
-                        <span className="badge-procesado inline-flex items-center px-2 py-1 rounded text-xs">Procesado</span>
-                      ) : (
-                        <span className="badge-sin-procesar inline-flex items-center px-2 py-1 rounded text-xs">Sin procesar</span>
-                      )}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* Badge "Nuevo" para emails importados recientemente */}
+                        {isNewEmail(e.createdAt) && (
+                          <span className="badge-email-nuevo inline-flex items-center px-2 py-1 rounded text-xs">Nuevo</span>
+                        )}
+                        {/* En procesamiento */}
+                        {processingIds.includes(e.id) && (
+                          <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-[color:var(--color-bg-muted)] text-[color:var(--color-text-primary)]">
+                            <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-[color:var(--color-primary-500)] mr-1" aria-hidden></span>
+                            En procesamiento
+                          </span>
+                        )}
+                        {/* Badge de estado procesado/sin procesar */}
+                        {e.processedAt !== null ? (
+                          <span className="badge-procesado inline-flex items-center px-2 py-1 rounded text-xs">Procesado</span>
+                        ) : (
+                          <span className="badge-sin-procesar inline-flex items-center px-2 py-1 rounded text-xs">Sin procesar</span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -388,7 +453,7 @@ export default function EmailTable() {
               {pageData.map((e) => (
                 <div
                   key={e.id}
-                  className="email-card mb-2"
+                  className={`email-card mb-2 ${isNewEmail(e.createdAt) ? 'email-card-nuevo' : ''}`}
                   onClick={() => onRowClick(e.id)}
                   role="button"
                   aria-label={`Abrir ${e.subject}`}
@@ -399,11 +464,17 @@ export default function EmailTable() {
                   </div>
                   <div className="email-card-subject">{e.subject}</div>
                   <div className="email-card-footer">
-                    {e.processed ? (
+                    {/* Badge "Nuevo" para emails importados recientemente */}
+                    {isNewEmail(e.createdAt) && (
+                      <span className="badge-email-nuevo inline-flex items-center px-2 py-1 rounded text-xs">Nuevo</span>
+                    )}
+                    {/* Badge de estado procesado/sin procesar */}
+                    {e.processedAt !== null ? (
                       <span className="badge-procesado inline-flex items-center px-2 py-1 rounded text-xs">Procesado</span>
                     ) : (
                       <span className="badge-sin-procesar inline-flex items-center px-2 py-1 rounded text-xs">Sin procesar</span>
                     )}
+                    {/* Badge de categoría si existe */}
                     {e.metadata?.category ? (
                       <span className={`inline-flex items-center px-2 py-1 rounded text-xs ${
                         e.metadata.category === "cliente"
@@ -454,6 +525,77 @@ export default function EmailTable() {
           </>
         )}
       </div>
+
+      {/* Modal de Procesamiento */}
+      <ProcessEmailsModal
+        open={showModal}
+        emails={selectedEmails}
+        processing={processing}
+        progress={progress}
+        resultSummary={resultSummary}
+        onClose={() => {
+          // Cerrar modal solo si no está procesando
+          if (!processing) {
+            setShowModal(false);
+            setResultSummary(null);
+            setProgress(0);
+          }
+        }}
+        onConfirm={async () => {
+          const ids = selectedEmails.map((e) => e.id);
+          if (ids.length === 0) return;
+
+          setProcessingIds(ids);
+          setProcessing(true);
+          setProgress(5);
+
+          // Simulación de progreso mientras espera la respuesta real
+          let local = 5;
+          const timer = window.setInterval(() => {
+            local = Math.min(90, local + 7);
+            setProgress(local);
+          }, 300);
+
+          try {
+            const result = await processEmailsWithAI(ids);
+            const errorIds = (result.errors || []).map((e) => e.emailId);
+
+            const items: { id: string; subject: string; from: string; status: "success" | "error"; error?: string }[] =
+              selectedEmails.map((e) => {
+                const failed = errorIds.includes(e.id);
+                return {
+                  id: e.id,
+                  subject: e.subject,
+                  from: e.from,
+                  status: (failed ? "error" : "success") as "error" | "success",
+                  error: failed ? "Fallo al procesar con IA" : undefined,
+                };
+              });
+
+            setResultSummary({ items });
+            setProgress(100);
+          } catch (err) {
+            console.error("Fallo en processEmailsWithAI:", err);
+            const items = selectedEmails.map((e) => ({
+              id: e.id,
+              subject: e.subject,
+              from: e.from,
+              status: "error" as const,
+              error: "Error inesperado en el procesamiento",
+            }));
+            setResultSummary({ items });
+            setProgress(100);
+          } finally {
+            window.clearInterval(timer);
+            setProcessing(false);
+            setProcessingIds([]);
+            setSelected({});
+            await reloadEmails();
+            // Nota: dejamos el modal abierto para que el usuario lea el resumen y cierre manualmente
+          }
+        }}
+      />
+
     </div>
   );
 }

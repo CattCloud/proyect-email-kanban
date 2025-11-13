@@ -1,13 +1,15 @@
 [
   {
+    "id": "email-008",
     "email": "cliente@empresa.com",
     "received_at": "2024-11-01T09:15:00Z",
     "subject": "Reunión urgente - Propuesta Q4",
-    "body": "Necesito que revisemos la propuesta y definamos los próximos pasos."
+    "body": "Necesito que revisemos la propuesta para el Q4. El cliente está esperando nuestra respuesta urgente para poder cerrar el acuerdo antes del fin del mes."
   },
   {
-    "email": "otro@cliente.com",
+    "id": "email-009",
+    "email": "lead@startup.com",
     "subject": "Consulta sobre servicios",
-    "body": "Me gustaría conocer más detalles sobre el plan empresarial."
+    "body": "Somos una startup en crecimiento de 50 empleados y estamos interesados en conocer más sobre sus servicios de consultoría. ¿Podrían enviarnos una propuesta?"
   }
 ]

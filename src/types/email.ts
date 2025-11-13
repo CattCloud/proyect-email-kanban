@@ -18,11 +18,13 @@ export interface EmailMetadata {
 // Tipo que coincide con lo que devuelve Prisma
 export interface PrismaEmail {
   id: string;
+  idEmail: string; // ID externo del email
   from: string;
   subject: string;
   body: string;
   receivedAt: Date;
-  processed: boolean;
+  createdAt: Date; // Fecha de importación del email
+  processedAt: Date | null; // Null = no procesado, fecha = procesado
   metadata?: EmailMetadata | null;
 }
 

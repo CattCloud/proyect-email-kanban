@@ -32,7 +32,7 @@ export default function EmailDetailView({ email, onBack }: EmailDetailViewProps)
   const handleEditMetadata = async () => {
     try {
       const result = await updateEmail(email.id, {
-        processed: !email.processed,
+        processedAt: email.processedAt !== null ? null : new Date().toISOString(), // Toggle: null -> fecha actual ISO, fecha actual -> null
         metadata: {
           category: email.metadata?.category ?? null,
           priority: email.metadata?.priority ?? null,
@@ -184,7 +184,7 @@ export default function EmailDetailView({ email, onBack }: EmailDetailViewProps)
 
       {/* Estado procesado/sin procesar rápido (badge) */}
       <div className="flex items-center gap-2 text-xs">
-        {email.processed ? (
+        {email.processedAt !== null ? (
           <span className="badge-procesado inline-flex items-center gap-1 px-2 py-1 rounded">
             <CheckCircle className="w-3 h-3" aria-hidden />
             Procesado por IA

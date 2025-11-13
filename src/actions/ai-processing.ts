@@ -1,0 +1,315 @@
+"use server";
+
+import { z } from "zod";
+import { revalidatePath } from "next/cache";
+import { prisma } from "@/lib/prisma";
+import { processEmailsBatch, type TokenUsage } from "@/services/openai";
+import {
+  mapEmailToAIInput,
+  buildEmailMetadataUpsertArgs,
+  buildContactsUpserts,
+} from "@/lib/ai-mapper";
+import type { EmailAnalysis } from "@/types/ai";
+
+// Wrapper seguro para revalidación (evita fallos en entorno de tests/CLI)
+function revalidateSafe(path: string): void {
+  try {
+    if (process.env.SKIP_REVALIDATE === "1") return;
+    revalidatePath(path);
+  } catch {
+    // noop en tests o entornos sin Next runtime
+  }
+}
+
+// ========================= Schemas =========================
+
+const EmailIdsSchema = z
+  .array(z.string().min(1, "ID de email requerido"))
+  .min(1, "Se requiere al menos 1 email")
+  .max(10, "Máximo 10 emails por batch");
+
+const SingleEmailIdSchema = z.string().min(1, "ID de email requerido");
+
+const PaginationSchema = z.object({
+  page: z.number().int().positive().default(1),
+  pageSize: z.number().int().positive().max(100).default(10),
+});
+
+// ========================= Tipos de Retorno =========================
+
+export interface ProcessEmailsSummary {
+  success: boolean;
+  processed: number;
+  errors: Array<{ emailId: string; error: string }>;
+  modelUsed?: string;
+  usage?: TokenUsage;
+  validationErrors?: string[];
+}
+
+export interface PagedEmailsResult {
+  success: boolean;
+  data?: unknown[];
+  total?: number;
+  page?: number;
+  pageSize?: number;
+  error?: string;
+}
+
+export interface GenericActionResult<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+}
+
+// ========================= Server Actions =========================
+
+/**
+ * Devuelve emails no procesados (processedAt IS NULL) con orden:
+ *  - receivedAt desc
+ *  - createdAt desc
+ * Paginado (page, pageSize)
+ */
+export async function getUnprocessedEmails(page = 1, pageSize = 10): Promise<PagedEmailsResult> {
+  try {
+    const { page: p, pageSize: ps } = PaginationSchema.parse({ page, pageSize });
+
+    const [total, data] = await Promise.all([
+      prisma.email.count({
+        where: { processedAt: null },
+      }),
+      prisma.email.findMany({
+        where: { processedAt: null },
+        include: { metadata: { include: { tasks: true } } },
+        orderBy: [{ receivedAt: "desc" }, { createdAt: "desc" }],
+        skip: (p - 1) * ps,
+        take: ps,
+      }),
+    ]);
+
+    return { success: true, data, total, page: p, pageSize: ps };
+  } catch (error) {
+    console.error("getUnprocessedEmails error:", error);
+    return { success: false, error: "Error al obtener emails sin procesar" };
+  }
+}
+
+/**
+ * Procesa emails con IA (máximo 10):
+ *  - Obtiene emails por IDs
+ *  - Llama a OpenAI (batch)
+ *  - Valida y mapea resultados
+ *  - Upsert de EmailMetadata + Tasks + Contact
+ *  - Manejo de errores granular por email
+ */
+export async function processEmailsWithAI(emailIds: string[]): Promise<ProcessEmailsSummary> {
+  const summary: ProcessEmailsSummary = {
+    success: false,
+    processed: 0,
+    errors: [],
+  };
+
+  try {
+    const ids = EmailIdsSchema.parse(emailIds);
+
+    // Cargar emails desde BD
+    const emails = await prisma.email.findMany({
+      where: { id: { in: ids } },
+    });
+
+    if (emails.length === 0) {
+      return { ...summary, success: false, processed: 0, errors: [{ emailId: "-", error: "No se encontraron emails" }] };
+    }
+
+    // Mapear a input IA
+    const aiInputs = emails.map(mapEmailToAIInput);
+
+    // Llamar a OpenAI
+    const aiResult = await processEmailsBatch(aiInputs);
+
+    summary.modelUsed = aiResult.modelUsed;
+    summary.usage = aiResult.usage;
+    if (aiResult.errors?.length) {
+      summary.validationErrors = aiResult.errors;
+    }
+
+    // Index rápido por ID de email en BD
+    const emailById = new Map(emails.map((e) => [e.id, e]));
+
+    // Procesar cada análisis devuelto por IA de forma independiente (manejo granular)
+    for (const analysis of aiResult.analyses as EmailAnalysis[]) {
+      const emailId = analysis.email_id;
+      const email = emailById.get(emailId);
+      if (!email) {
+        summary.errors.push({ emailId, error: "Análisis no coincide con un email existente" });
+        continue;
+      }
+
+      try {
+        // Transacción por email: upsert de metadata+tasks y contactos
+        await prisma.$transaction(async (tx) => {
+          // Upsert metadata + tasks
+          const mdUpsertArgs = buildEmailMetadataUpsertArgs(email, analysis);
+          await tx.emailMetadata.upsert(mdUpsertArgs);
+
+          // Upserts de contactos (remitente + participantes)
+          const contactUpserts = buildContactsUpserts(email, analysis);
+          for (const args of contactUpserts) {
+            await tx.contact.upsert(args);
+          }
+        });
+
+        summary.processed += 1;
+      } catch (err) {
+        console.error(`Fallo al persistir análisis para email ${emailId}:`, err);
+        summary.errors.push({ emailId, error: "Error al guardar resultados IA en base de datos" });
+      }
+    }
+
+    // Revalidar rutas afectadas (emails, kanban, dashboard)
+    revalidateSafe("/emails");
+    revalidateSafe("/kanban");
+    revalidateSafe("/");
+
+    summary.success = summary.errors.length === 0;
+    return summary;
+  } catch (error) {
+    console.error("processEmailsWithAI error:", error);
+    summary.errors.push({ emailId: "-", error: "Error general de procesamiento" });
+    return summary;
+  }
+}
+
+/**
+ * Obtiene resultados IA pendientes de revisión:
+ *  - Emails con processedAt === null
+ *  - Incluye EmailMetadata + Tasks (recientemente generados)
+ *  - Filtra por IDs específicos
+ */
+export async function getPendingAIResults(emailIds: string[]): Promise<GenericActionResult> {
+  try {
+    const ids = EmailIdsSchema.parse(emailIds);
+
+    const data = await prisma.email.findMany({
+      where: {
+        id: { in: ids },
+        processedAt: null,
+      },
+      include: {
+        metadata: {
+          include: { tasks: true },
+        },
+      },
+      orderBy: [{ receivedAt: "desc" }, { createdAt: "desc" }],
+    });
+
+    return { success: true, data };
+  } catch (error) {
+    console.error("getPendingAIResults error:", error);
+    return { success: false, error: "Error al obtener resultados IA pendientes" };
+  }
+}
+
+/**
+ * Confirma o rechaza resultados IA de un email.
+ *  - confirmed = true: marca processedAt = now
+ *  - confirmed = false: elimina EmailMetadata (+ cascade elimina Tasks), mantiene processedAt = null
+ */
+export async function confirmAIResults(emailId: string, confirmed: boolean): Promise<GenericActionResult> {
+  try {
+    const id = SingleEmailIdSchema.parse(emailId);
+
+    // Verificar existencia
+    const existing = await prisma.email.findUnique({
+      where: { id },
+      include: { metadata: true },
+    });
+
+    if (!existing) return { success: false, error: "Email no encontrado" };
+
+    if (confirmed) {
+      const updated = await prisma.email.update({
+        where: { id },
+        data: { processedAt: new Date() },
+        include: { metadata: { include: { tasks: true } } },
+      });
+      revalidateSafe("/emails");
+      revalidateSafe("/kanban");
+      return { success: true, data: updated, message: "Resultados IA confirmados y marcados como procesados" };
+    } else {
+      // Rechazar: eliminar metadata (tasks en cascade), mantener processedAt = null
+      await prisma.$transaction(async (tx) => {
+        await tx.emailMetadata.deleteMany({ where: { emailId: id } });
+        await tx.email.update({ where: { id }, data: { processedAt: null } });
+      });
+      revalidateSafe("/emails");
+      return { success: true, message: "Resultados IA rechazados y limpiados" };
+    }
+  } catch (error) {
+    console.error("confirmAIResults error:", error);
+    return { success: false, error: "Error al confirmar/rechazar resultados IA" };
+  }
+}
+
+/**
+ * Marca un conjunto de emails como procesados con processedAt = now
+ */
+export async function updateProcessedAt(emailIds: string[]): Promise<GenericActionResult> {
+  try {
+    const ids = EmailIdsSchema.parse(emailIds);
+    const result = await prisma.email.updateMany({
+      where: { id: { in: ids } },
+      data: { processedAt: new Date() },
+    });
+    revalidateSafe("/emails");
+    revalidateSafe("/kanban");
+    return { success: true, data: result, message: "Emails marcados como procesados" };
+  } catch (error) {
+    console.error("updateProcessedAt error:", error);
+    return { success: false, error: "Error al actualizar processedAt" };
+  }
+}
+
+/**
+ * HITO 4: Obtener TODOS los resultados IA pendientes de revisión (processedAt IS NULL)
+ * Incluye EmailMetadata + Tasks para permitir edición/confirmación
+ */
+export async function getPendingAllAIResults(): Promise<GenericActionResult> {
+  try {
+    const data = await prisma.email.findMany({
+      where: {
+        processedAt: null,
+        // Deben existir resultados IA a revisar (metadata creada)
+        metadata: { isNot: null },
+      },
+      include: {
+        metadata: {
+          include: { tasks: true },
+        },
+      },
+      orderBy: [{ receivedAt: "desc" }, { createdAt: "desc" }],
+    });
+    return { success: true, data };
+  } catch (error) {
+    console.error("getPendingAllAIResults error:", error);
+    return { success: false, error: "Error al obtener resultados IA pendientes" };
+  }
+}
+
+/**
+ * HITO 4: Confirmar resultados IA (wrapper)
+ * - Marca processedAt = now (publica resultados)
+ * - Revalida rutas
+ */
+export async function confirmProcessingResults(emailId: string): Promise<GenericActionResult> {
+  return confirmAIResults(emailId, true);
+}
+
+/**
+ * HITO 4: Rechazar resultados IA (wrapper)
+ * - Elimina EmailMetadata (+ cascade Tasks), mantiene processedAt = null
+ * - Revalida rutas
+ */
+export async function rejectProcessingResults(emailId: string): Promise<GenericActionResult> {
+  return confirmAIResults(emailId, false);
+}

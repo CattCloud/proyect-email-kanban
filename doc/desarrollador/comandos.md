@@ -1,0 +1,7 @@
+Crear la version 2 del archivo @/doc/SISTEMA_MAESTRO_PROYECTO.md consolidando, lee el contenido del documento Sistema Maestro para que veas las secciones y el punto en el que nos quedamos luego redacta en un nuevo .md la nueva version SISTEMA_MAESTRO_PROYECTOV2.md de forma verificada y fidedigna, todo lo realizado hasta ahora indicado en @/doc/PLANIFICACION_SEMANA2.md. Consulta también @/doc/COMPONENTES_MODIFICADOS_SEMANA2.md, pero no te bases únicamente en ese documento; valida cada afirmación inspeccionando el código fuente actual del repositorio. Considera como punto de partida que el HITO 3 está confirmado como completado y el HITO 4 está en progreso al 80%, con la importación funcionando en la UI y pendientes las pruebas de importación y la documentación de formato JSON y guía de usuario, y verifica en el código que estos estados sean correctos; en caso de discrepancias entre planificación y código, prioriza el código como fuente de verdad y corrige la documentación en consecuencia.
+
+Antes de redactar, realiza una revisión técnica del repositorio para respaldar cada sección del SISTEMA MAESTRO: Haz un barrido de los directorios relevantes (src/app, src/components, src/lib, src/server, prisma u otros presentes) 
+
+Entrega como resultado un @/doc/SISTEMA_MAESTRO_PROYECTOV2.md completo,preciso y detallado(no resumido) que servira ahora como única fuente maestra del sistema
+
+--------------

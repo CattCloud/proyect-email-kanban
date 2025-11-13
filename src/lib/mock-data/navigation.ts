@@ -24,6 +24,12 @@ export const navigationItems: NavigationItem[] = [
     description: 'Gestión de emails'
   },
   {
+    label: 'Revisión IA',
+    href: '/processing/review',
+    icon: 'Columns',
+    description: 'Revisión y confirmación de IA'
+  },
+  {
     label: 'Kanban',
     href: '/kanban',
     icon: 'Columns',

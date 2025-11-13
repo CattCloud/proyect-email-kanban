@@ -6,6 +6,8 @@
 // Exportar tipos de email
 export * from './email';
 
+// Exportar tipos de IA
+export * from './ai';
 // Aquí se agregarán futuras exportaciones de otros tipos:
 // export * from './user';
 // export * from './kanban';
