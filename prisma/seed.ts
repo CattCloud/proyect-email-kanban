@@ -5,121 +5,87 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('Iniciando seed de datos...');
 
+  // Limpieza de datos previos (solo desarrollo)
+  // Orden: primero dependientes para respetar FKs
+  await prisma.task.deleteMany({});
+  await prisma.emailMetadata.deleteMany({});
+  await prisma.contact.deleteMany({});
+  await prisma.email.deleteMany({});
+
   // Crear emails de ejemplo con diferentes createdAt para testing
   const now = new Date('2025-11-11T16:22:17.000Z'); // Tiempo base para el seed
   
-  const emails = [
+  interface SeedEmail {
+  idEmail: string;
+  from: string;
+  subject: string;
+  body: string;
+  receivedAt: Date;
+  createdAt: Date;
+  processedAt: Date | null;
+  metadata?: {
+    category: string | null;
+    priority: string | null;
+    hasTask: boolean;
+    taskDescription: string | null;
+    taskStatus: string | null;
+  };
+}
+
+  const emails: SeedEmail[] = [
     {
-      idEmail: 'email-001',
-      from: 'cliente@ejemplo.com',
-      subject: 'Consulta sobre producto',
-      body: 'Hola, estoy interesado en su producto. ¿Podrían enviarme más información?',
+      idEmail: 'email-ai-001',
+      from: 'maria.garcia@clientex.com',
+      subject: 'Revisión urgente de propuesta Q4 antes del viernes',
+      body: 'Hola equipo, necesitamos revisar la propuesta Q4 y agendar una reunión antes del viernes. Por favor enviar el borrador del contrato actualizado. Copiar a director@miempresa.com en la comunicación. Gracias, María.',
       receivedAt: new Date('2025-11-01T10:00:00Z'),
-      createdAt: new Date(now.getTime() - 2 * 60 * 1000), // 2 minutos atrás (NUEVO)
-      processedAt: new Date(), // Procesado
-      metadata: {
-        category: 'cliente',
-        priority: 'alta',
-        hasTask: true,
-        taskDescription: 'Responder consulta del cliente',
-        taskStatus: 'todo'
-      }
+      createdAt: new Date(now.getTime() - 4 * 60 * 1000),
+      processedAt: null
     },
     {
-      idEmail: 'email-002',
-      from: 'lead@ejemplo.com',
-      subject: 'Solicitud de cotización',
-      body: 'Buen día, me gustaría solicitar una cotización para los siguientes servicios...',
+      idEmail: 'email-ai-002',
+      from: 'prospecto@nuevaempresa.com',
+      subject: 'Solicitud de información y llamada exploratoria',
+      body: 'Buenos días, estamos evaluando sus servicios de consultoría. ¿Podrían enviar paquetes y precios? Nos gustaría agendar una llamada la próxima semana.',
       receivedAt: new Date('2025-11-02T14:30:00Z'),
-      createdAt: new Date(now.getTime() - 1 * 60 * 1000), // 1 minuto atrás (NUEVO)
-      processedAt: new Date(), // Procesado
-      metadata: {
-        category: 'lead',
-        priority: 'media',
-        hasTask: true,
-        taskDescription: 'Preparar cotización para el lead',
-        taskStatus: 'doing'
-      }
+      createdAt: new Date(now.getTime() - 6 * 60 * 1000),
+      processedAt: null
     },
     {
-      idEmail: 'email-003',
-      from: 'interno@empresa.com',
-      subject: 'Reunión de equipo',
-      body: 'Recordatorio: mañana a las 10:00 AM tendremos reunión de equipo para discutir el proyecto X.',
+      idEmail: 'email-ai-003',
+      from: 'rrhh@miempresa.com',
+      subject: 'Recordatorio: Capacitación de seguridad jueves 10 AM',
+      body: 'Equipo, recordamos capacitación obligatoria de seguridad este jueves a las 10 AM en la sala principal. Duración aproximada: 2 horas.',
       receivedAt: new Date('2025-11-03T09:15:00Z'),
-      createdAt: new Date(now.getTime() - 10 * 60 * 1000), // 10 minutos atrás (NO NUEVO)
-      processedAt: null, // Sin procesar
-      metadata: {
-        category: 'interno',
-        priority: 'baja',
-        hasTask: true,
-        taskDescription: 'Preparar agenda para reunión',
-        taskStatus: 'done'
-      }
+      createdAt: new Date(now.getTime() - 10 * 60 * 1000),
+      processedAt: null
     },
     {
-      idEmail: 'email-004',
-      from: 'noreply@spam.com',
-      subject: 'Oferta especial',
-      body: '¡Felicidades! Ha sido seleccionado para recibir una oferta especial...',
+      idEmail: 'email-ai-004',
+      from: 'cliente.vip@corporacion.com',
+      subject: 'Escalamiento: Incidente crítico en producción',
+      body: 'URGENTE: Incidente crítico en producción afectando a 500+ usuarios. Coordinar con soporte@miempresa.com y enviar reporte en 2 horas. Incluir a director@miempresa.com en la comunicación.',
       receivedAt: new Date('2025-11-04T16:45:00Z'),
-      createdAt: new Date(now.getTime() - 30 * 60 * 1000), // 30 minutos atrás (NO NUEVO)
-      processedAt: null, // Sin procesar
-      metadata: {
-        category: 'spam',
-        priority: 'baja',
-        hasTask: false,
-        taskDescription: null,
-        taskStatus: null
-      }
+      createdAt: new Date(now.getTime() - 8 * 60 * 1000),
+      processedAt: null
     },
     {
-      idEmail: 'email-005',
-      from: 'cliente2@ejemplo.com',
-      subject: 'Seguimiento de pedido',
-      body: 'Estimado cliente, le escribo para hacer seguimiento de su pedido #12345...',
+      idEmail: 'email-ai-005',
+      from: 'info@startupxyz.com',
+      subject: 'Solicitud de demo del producto',
+      body: 'Hola, estamos interesados en una demo del producto este jueves en la mañana. Por favor confirmar disponibilidad y requerimientos.',
       receivedAt: new Date('2025-11-05T11:20:00Z'),
-      createdAt: new Date(now.getTime() - 3 * 60 * 1000), // 3 minutos atrás (NUEVO)
-      processedAt: new Date(), // Procesado
-      metadata: {
-        category: 'cliente',
-        priority: 'alta',
-        hasTask: true,
-        taskDescription: 'Verificar estado del pedido y responder al cliente',
-        taskStatus: 'todo'
-      }
+      createdAt: new Date(now.getTime() - 3 * 60 * 1000),
+      processedAt: null
     },
     {
-      idEmail: 'email-006',
-      from: 'proveedor@empresa.com',
-      subject: 'Actualización de precios',
-      body: 'Le informamos sobre las nuevas tarifas para el próximo trimestre...',
-      receivedAt: new Date('2025-11-05T15:30:00Z'),
-      createdAt: new Date(now.getTime() - 8 * 60 * 1000), // 8 minutos atrás (NO NUEVO)
-      processedAt: new Date(), // Procesado
-      metadata: {
-        category: 'cliente',
-        priority: 'media',
-        hasTask: true,
-        taskDescription: 'Revisar nueva estructura de precios',
-        taskStatus: 'todo'
-      }
-    },
-    {
-      idEmail: 'email-007',
-      from: 'marketing@digital.com',
-      subject: 'Campaña de Black Friday',
-      body: 'Prepárate para la mayor campaña del año con descuentos increíbles...',
+      idEmail: 'email-ai-006',
+      from: 'marketing@promos.com',
+      subject: '¡OFERTA EXCLUSIVA! 50% de descuento HOY',
+      body: 'No te lo pierdas: 50% de descuento en todos nuestros productos solo por hoy. Haz clic aquí para aprovechar esta oportunidad.',
       receivedAt: new Date('2025-11-06T08:00:00Z'),
-      createdAt: new Date(now.getTime() - 30 * 1000), // 30 segundos atrás (MUY NUEVO)
-      processedAt: null, // Sin procesar
-      metadata: {
-        category: 'spam',
-        priority: 'baja',
-        hasTask: false,
-        taskDescription: null,
-        taskStatus: null
-      }
+      createdAt: new Date(now.getTime() - 30 * 1000),
+      processedAt: null
     }
   ];
 
@@ -135,15 +101,36 @@ async function main() {
           receivedAt: email.receivedAt,
           createdAt: email.createdAt,
           processedAt: email.processedAt,
-          metadata: email.metadata ? {
-            create: {
-              category: email.metadata.category,
-              priority: email.metadata.priority,
-              hasTask: email.metadata.hasTask,
-              taskDescription: email.metadata.taskDescription,
-              taskStatus: email.metadata.taskStatus
-            }
-          } : undefined
+          metadata: email.metadata
+            ? {
+                create: {
+                  category: email.metadata.category,
+                  priority: email.metadata.priority,
+                  // Campos IA agregados en HITO 2
+                  summary: email.subject, // resumen simple basado en subject
+                  contactName: null,      // opcional; se puede enriquecer posteriormente
+                  // Compatibilidad legacy
+                  hasTask: email.metadata.hasTask,
+                  taskDescription: email.metadata.taskDescription,
+                  taskStatus: email.metadata.taskStatus,
+                  // Crear una tarea simple si hay hasTask = true
+                  tasks: email.metadata.hasTask
+                    ? {
+                        create: [
+                          {
+                            description:
+                              email.metadata.taskDescription ?? "Tarea generada desde seed",
+                            dueDate: null,
+                            tags: [],
+                            participants: [email.from],
+                            status: email.metadata.taskStatus ?? "todo",
+                          },
+                        ],
+                      }
+                    : undefined,
+                },
+              }
+            : undefined
         }
       });
     }

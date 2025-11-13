@@ -230,7 +230,7 @@ Sistema inteligente que:
 
 | Servicio/Librería | Versión | Propósito | Estado |
 |------------------|---------|-----------|--------|
-| **OpenAI API** | 6.8.1 | Procesamiento de emails y extracción de metadata | ⏳ Instalado, implementación pendiente |
+| **OpenAI API** | 6.8.1 | Procesamiento de emails y extracción de metadata | ✅ IMPLEMENTADO (servicio OpenAI, prompts, schemas Zod, tests mock) |
 
 ### 2.7 Funcionalidad Específica (Instaladas, No Implementadas)
 
@@ -312,7 +312,7 @@ El sistema utiliza el **Smart Actions Pattern** de Next.js 15 completamente impl
 │   └── emails.ts            # 7 Server Actions con validación Zod completa
 │
 ├── services/                # Integraciones externas
-│   └── README.md            # [PENDIENTE] OpenAI API integration
+│   └── README.md            # [ACTUALIZADO] OpenAI API integration (HITO 1)
 │
 ├── lib/                     # Utilidades centrales
 │   ├── utils.ts             # [IMPLEMENTADO] Utilidades básicas (cn)
@@ -355,7 +355,10 @@ El sistema utiliza el **Smart Actions Pattern** de Next.js 15 completamente impl
 │   ├── schema.prisma        # Modelos Email y EmailMetadata
 │   ├── seed.ts              # Datos de ejemplo para desarrollo
 │   └── migrations/          # Migraciones ejecutadas
-│       └── 20251109043012_init/
+│       ├── 20251109043012_init/
+│       ├── 20251111145200_add_idEmail_field/
+│       ├── 20251111162112_add_created_at_field/
+│       └── 20251111173000_change_processed_to_processedAt/
 │
 └── tests/                   # Testing
     └── README.md            # [PENDIENTE] Pruebas unitarias e integración
@@ -405,15 +408,20 @@ export default function EmailTable() { } // src/components/emails/EmailTable.tsx
 
 ```typescript
 model Email {
-  id         String         @id @default(cuid())
-  from       String         // Email del remitente
-  subject    String         // Asunto del email
-  body       String         // Contenido completo
-  receivedAt DateTime       @default(now())
-  processed  Boolean        @default(false)
-  metadata   EmailMetadata? // Relación 1:1 con metadata
+  id          String         @id @default(cuid())
+  idEmail     String         @unique
+  from        String         // Email del remitente
+  subject     String         // Asunto del email
+  body        String         // Contenido completo
+  receivedAt  DateTime       @default(now())
+  createdAt   DateTime       @default(now())
+  processedAt DateTime?      // Null = no procesado, fecha = procesado
+  metadata    EmailMetadata? // Relación 1:1 con metadata
 
-  @@index([from, subject, processed, receivedAt]) // Índices optimizados
+  @@index([processedAt])
+  @@index([receivedAt])
+  @@index([createdAt])
+  @@index([idEmail])
 }
 
 model EmailMetadata {
@@ -442,11 +450,13 @@ model EmailMetadata {
 ```typescript
 export interface EmailWithMetadata {
   id: string;
+  idEmail: string;
   from: string;
   subject: string;
   body: string;
   receivedAt: Date;
-  processed: boolean;
+  createdAt: Date;
+  processedAt: Date | null;
   metadata: EmailMetadata | null;
 }
 
@@ -508,18 +518,20 @@ export interface EmailMetadata {
 ```typescript
 // Validación estricta para emails
 const EmailSchema = z.object({
+  idEmail: z.string().min(1, "idEmail requerido"),
   from: z.string().email("Email inválido"),
   subject: z.string().min(1, "El asunto es requerido"),
   body: z.string().min(1, "El contenido es requerido"),
   receivedAt: z.string().optional(),
-  processed: z.boolean().default(false)
+  createdAt: z.string().optional(),
+  processedAt: z.string().nullable().optional()
 })
 
 // Validación para importación (Product Brief format)
 const ImportEmailSchema = z.object({
-  id: z.string().optional(),        // Se ignora
-  email: z.string().email(),        // Mapea a 'from'
-  received_at: z.string().optional(), // Mapea a 'receivedAt'
+  id: z.string().min(1),               // Mapea a 'idEmail'
+  email: z.string().email(),           // Mapea a 'from'
+  received_at: z.string().optional(),  // Mapea a 'receivedAt'
   subject: z.string().min(1),
   body: z.string().min(1)
 })
@@ -603,7 +615,8 @@ try {
 - ✅ [`EmailTable`](src/components/emails/EmailTable.tsx): Conectado a [`getEmails()`](src/actions/emails.ts:77)
   - Estados de loading/error implementados ([líneas 298-309](src/components/emails/EmailTable.tsx:298))
   - Filtros y paginación funcionando con datos reales
-  - Selección múltiple y ordenamiento
+  - Selección múltiple y doble ordenamiento (`receivedAt desc` → `createdAt desc`) con `useMemo()`
+  - Indicador visual "Nuevo" (últimos 5 minutos) y resaltado de fila para emails recientes
 - ✅ [`EmailDetailView`](src/components/emails/EmailDetailView.tsx): Conectado a [`getEmailById()`](src/actions/emails.ts:101)
   - Loading skeleton mientras carga ([líneas 46-53](src/app/(protected)/emails/[id]/page.tsx:46))
   - Manejo de email no encontrado ([líneas 55-67](src/app/(protected)/emails/[id]/page.tsx:55))
@@ -638,13 +651,14 @@ try {
 
 **CSS implementado en [`globals.css`](src/app/globals.css:692):**
 - `.badge-categoria-cliente`: Azul - emails de clientes existentes
-- `.badge-categoria-lead`: Verde - prospectos nuevos  
+- `.badge-categoria-lead`: Verde - prospectos nuevos
 - `.badge-categoria-interno`: Gris - comunicaciones internas
 - `.badge-categoria-spam`: Rojo - correos no deseados
 - `.badge-prioridad-alta`: Rojo - urgente
 - `.badge-prioridad-media`: Amarillo - importante
 - `.badge-prioridad-baja`: Gris - normal
 - `.badge-procesado` / `.badge-sin-procesar`: Estados de procesamiento IA
+- `.badge-email-nuevo`: Azul destacado - emails importados recientemente (últimos 5 minutos)
 
 ### 8.5 Responsive Design ✅ COMPLETAMENTE IMPLEMENTADO
 
@@ -698,9 +712,9 @@ JSON Upload → ImportEmailsModal → Validación Zod → importEmailsFromJSON()
 
 **Preparación completada:**
 - ✅ Framework de metadata preparado en base de datos
-- ✅ Campos `processed`, `category`, `priority` listos
+- ✅ Campos `processedAt`, `category`, `priority` listos
 - ✅ Schema [`EmailMetadata`](prisma/schema.prisma:30) diseñado para IA
-- ⏳ OpenAI API integration pendiente
+- ✅ OpenAI API integration implementada (servicio, prompts, schemas y tests mock)
 
 ### 9.3 Flujos de Navegación ✅ IMPLEMENTADOS
 
@@ -733,9 +747,10 @@ JSON Upload → ImportEmailsModal → Validación Zod → importEmailsFromJSON()
 
 **OpenAI API (6.8.1):**
 - ✅ Instalado en [`package.json:21`](package.json:21)
-- ⏳ Configuración de API key pendiente
-- ⏳ Prompts de procesamiento pendientes
-- ⏳ Integración con Server Actions pendiente
+- ✅ Configuración de API key completada ([`.env`](.env) y [`.env.example`](.env.example))
+- ✅ Prompts de procesamiento completados ([`src/lib/prompts/email-processing.ts`](src/lib/prompts/email-processing.ts))
+- ✅ Servicio y validación implementados ([`src/services/openai.ts`](src/services/openai.ts), [`src/types/ai.ts`](src/types/ai.ts))
+- ⏳ Integración con Server Actions pendiente (HITO 2)
 
 **NextAuth (4.24.13):**
 - ✅ Instalado en [`package.json:19`](package.json:19)
@@ -830,6 +845,7 @@ OPENAI_API_KEY=
 **Optimizaciones Frontend:**
 - ✅ Memoización con `useMemo()` en filtering/sorting ([`EmailTable.tsx:124`](src/components/emails/EmailTable.tsx:124))
 - ✅ Control de concurrencia de requests ([`EmailTable.tsx:74-76`](src/components/emails/EmailTable.tsx:74))
+- ✅ Doble ordenamiento por `receivedAt` y `createdAt` optimizado y estable
 - ✅ Loading states consistentes en todos los componentes
 
 **Optimizaciones UX:**
@@ -1236,7 +1252,7 @@ El sistema ha evolucionado exitosamente de un **prototipo visual con datos mock*
 ### 20.3 Preparación para IA
 
 **Infraestructura lista para OpenAI:**
-- ✅ Campo `processed` en base de datos
+- ✅ Campo `processedAt` en base de datos
 - ✅ Modelo `EmailMetadata` completo
 - ✅ Server Actions preparadas para procesamiento batch
 - ✅ UI preparada para mostrar resultados de IA
@@ -1260,3 +1276,109 @@ El sistema ha evolucionado exitosamente de un **prototipo visual con datos mock*
 **Nota:** Este documento refleja el estado técnico real del sistema verificado mediante inspección directa del código fuente el 11 de Noviembre, 2025. Es la fuente de verdad actualizada para todo el desarrollo futuro.
 
 **Próxima actualización:** Post-implementación Semana 3 (18 Noviembre, 2025)
+
+---
+
+## 21. Actualización Semana 3 - HITO 2 (En progreso)
+
+### 21.1 Resumen del Avance Técnico (HITO 2)
+- ✅ Esquema Prisma actualizado con nuevos modelos IA
+  - EmailMetadata reestructurado con summary y contactName
+  - Nuevos modelos: Task y Contact
+  - Índices agregados para consultas eficientes
+- ✅ Migración aplicada y base de datos sincronizada
+  - Migración: [`20251112185039_hito2_ai_models`](prisma/migrations/20251112185039_hito2_ai_models/migration.sql)
+- ✅ Seed actualizado con estructura completa (crea Tasks cuando aplica)
+  - Archivo: [`prisma/seed.ts`](prisma/seed.ts)
+- ✅ Función de mapeo IA → BD implementada
+  - Archivo: [`src/lib/ai-mapper.ts`](src/lib/ai-mapper.ts)
+- ✅ Server Actions de procesamiento IA creadas
+  - Archivo: [`src/actions/ai-processing.ts`](src/actions/ai-processing.ts)
+- ⏳ Pendiente: Tests de Server Actions (éxito/errores/rollback/FK), actualización UI (Hitos 3 y 4)
+
+### 21.2 Cambios de Base de Datos (HITO 2)
+- Modelos añadidos/actualizados en [`schema.prisma`](prisma/schema.prisma):
+```prisma
+model EmailMetadata {
+  id              String  @id @default(cuid())
+  emailId         String  @unique
+  category        String?
+  priority        String?
+  summary         String?
+  contactName     String?
+  hasTask         Boolean @default(false)
+  taskDescription String?
+  taskStatus      String?
+  createdAt       DateTime @default(now())
+  email           Email   @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  tasks           Task[]
+
+  @@index([category])
+  @@index([priority])
+  @@index([hasTask])
+  @@index([taskStatus])
+  @@index([emailId])
+  @@index([createdAt])
+  @@index([category, priority, hasTask, taskStatus])
+}
+
+model Task {
+  id              String         @id @default(cuid())
+  emailMetadataId String
+  emailMetadata   EmailMetadata  @relation(fields: [emailMetadataId], references: [id], onDelete: Cascade)
+  description     String
+  dueDate         DateTime?
+  tags            String[]
+  participants    String[]
+  createdAt       DateTime       @default(now())
+  status          String         @default("todo")
+
+  @@index([emailMetadataId])
+  @@index([status])
+}
+
+model Contact {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+}
+```
+
+### 21.3 Server Actions (HITO 2)
+- Archivo principal: [`src/actions/ai-processing.ts`](src/actions/ai-processing.ts)
+- Funcionalidades:
+  - getUnprocessedEmails(page, pageSize): lista emails con processedAt IS NULL con doble ordenamiento (receivedAt desc, createdAt desc)
+  - processEmailsWithAI(emailIds): integra servicio OpenAI, valida y persiste EmailMetadata + Tasks + Contact por email (transacción por email, manejo granular de errores)
+  - getPendingAIResults(emailIds): trae resultados IA pendings para revisión
+  - confirmAIResults(emailId, confirmed): confirma (marca processedAt) o rechaza (limpia metadata y tasks)
+  - updateProcessedAt(emailIds): marca lote como procesado
+
+### 21.4 Servicio de Mapeo y Persistencia
+- Archivo: [`src/lib/ai-mapper.ts`](src/lib/ai-mapper.ts)
+- Capacidades:
+  - mapEmailToAIInput(): Email (DB) → EmailInput (IA)
+  - buildEmailMetadataUpsertArgs(): EmailAnalysis (IA) → upsert de EmailMetadata + Tasks
+  - buildContactsUpserts(): crea/actualiza contactos (remitente y participantes)
+  - Compatibilidad legacy: hasTask/taskDescription/taskStatus siguen mapeándose desde la primera tarea IA
+
+### 21.5 Seed de Datos Ajustado (Compatibilidad con IA)
+- Archivo: [`prisma/seed.ts`](prisma/seed.ts)
+- Cambios:
+  - summary y contactName poblados (summary derivado del subject por defecto)
+  - creación de Task relacional cuando hasTask = true
+  - mantiene compatibilidad con vistas y filtros existentes
+
+### 21.6 Próximos Pasos (para cierre HITO 2)
+- 🧪 Agregar pruebas de Server Actions:
+  - Éxito con OpenAI mock
+  - Manejo de errores del servicio OpenAI
+  - Transacciones con rollback en fallos parciales
+  - Integridad y relaciones FK (EmailMetadata ↔ Tasks)
+- 📝 Documentación:
+  - Detallar casos de error/edge cases y estrategias de retry server-side
+- 🔒 Seguridad:
+  - Validaciones Zod en inputs de Server Actions (ya incluidas en ai-processing)
+- 🔁 Integración con UI (HITOS 3 y 4):
+  - Conectar tabla de Emails a getUnprocessedEmails
+  - Integrar modal y flujo de revisión con getPendingAIResults/confirmAIResults

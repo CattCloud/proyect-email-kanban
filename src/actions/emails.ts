@@ -270,6 +270,8 @@ export async function getEmailsWithTasks() {
   try {
     const emails = await prisma.email.findMany({
       where: {
+        // HITO 4: Mostrar SOLO tareas de emails confirmados (processedAt != null)
+        processedAt: { not: null },
         metadata: {
           hasTask: true
         }
@@ -285,9 +287,9 @@ export async function getEmailsWithTasks() {
     return { success: true, data: emails }
   } catch (error) {
     console.error("Error al obtener emails con tareas:", error)
-    return { 
-      success: false, 
-      error: "Error al obtener los emails con tareas" 
+    return {
+      success: false,
+      error: "Error al obtener los emails con tareas"
     }
   }
 }

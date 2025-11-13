@@ -29,8 +29,8 @@ Verifica que la respuesta de la IA sea válida (ej. que tenga todos los campos r
 - Si pasa, continúa el flujo.
 - Si falla, registra un error para revisión o corrección manual.
 
-### 6. **Tabla de Salida: EmailMetadata y otras tablas definidas(BD)**
-Aquí se almacenan los datos extraídos: por ejemplo, `email_id`, `tareas_detectadas`, `prioridad`, `resumen`, `estatus_procesamiento`, `fecha_procesamiento`.
+### 6. **Tabla de Salida: EmailMetadata y Task**
+Aquí se almacenan los datos extraídos.
 Es la "salida principal" del flujo.
 
 ### 7. **Interfaz Visual (Kanban, Dashboards)**
