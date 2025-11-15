@@ -429,3 +429,52 @@ export async function importEmailsFromJSON(jsonData: string): Promise<ImportResu
     }
   }
 }
+
+/**
+ * Obtiene el remitente (campo `from`) más frecuente en la base de datos
+ */
+export async function getMostFrequentSender() {
+  try {
+    const emails = await prisma.email.findMany({
+      select: {
+        from: true,
+      },
+    });
+
+    if (emails.length === 0) {
+      return {
+        success: true,
+        data: null,
+      };
+    }
+
+    // Contar la frecuencia de cada remitente
+    const frequency: Record<string, number> = {};
+    
+    for (const email of emails) {
+      const sender = email.from;
+      frequency[sender] = (frequency[sender] || 0) + 1;
+    }
+
+    // Encontrar el remitente con mayor frecuencia
+    let mostFrequent = { email: "", count: 0 };
+    
+    for (const [email, count] of Object.entries(frequency)) {
+      if (count > mostFrequent.count) {
+        mostFrequent = { email, count };
+      }
+    }
+
+    return {
+      success: true,
+      data: mostFrequent,
+    };
+  } catch (error) {
+    console.error("Error getting most frequent sender:", error);
+    return {
+      success: false,
+      error: "Error al obtener el remitente más frecuente",
+      data: null,
+    };
+  }
+}

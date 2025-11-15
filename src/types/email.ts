@@ -64,4 +64,8 @@ export interface DashboardMetrics {
   unprocessedEmails: number;
   pendingTasks: number;
   completedTasks: number;
+    mostFrequentSender?: {  
+    email: string;
+    count: number;
+  } | null;
 }

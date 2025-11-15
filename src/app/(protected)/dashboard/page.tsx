@@ -3,9 +3,22 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Mail, Clock, CheckSquare, BarChart2, ArrowRight, RefreshCw } from "lucide-react";
+import {
+  Mail,
+  Clock,
+  CheckSquare,
+  BarChart2,
+  ArrowRight,
+  RefreshCw,
+  TrendingUp,
+} from "lucide-react";
 import MetricCard from "@/components/dashboard/MetricCard";
-import { getEmails, getEmailsWithTasks, getRecentEmails } from "@/actions/emails";
+import {
+  getEmails,
+  getEmailsWithTasks,
+  getRecentEmails,
+  getMostFrequentSender,
+} from "@/actions/emails";
 import Button from "@/components/ui/button";
 import { DashboardMetrics } from "@/types";
 import { EmailWithMetadata } from "@/types";
@@ -49,7 +62,8 @@ export default function DashboardPage() {
     totalEmails: 0,
     unprocessedEmails: 0,
     pendingTasks: 0,
-    completedTasks: 0
+    completedTasks: 0,
+    mostFrequentSender: null,
   });
 
   const [recent, setRecent] = useState<EmailWithMetadata[]>([]);
@@ -65,25 +79,43 @@ export default function DashboardPage() {
         const allEmailsResult = await getEmails();
         if (allEmailsResult.success && allEmailsResult.data) {
           const total = allEmailsResult.data.length;
-          const unprocessed = allEmailsResult.data.filter(e => e.processedAt === null).length;
+          const unprocessed = allEmailsResult.data.filter(
+            (e) => e.processedAt === null
+          ).length;
 
-          setMetrics(prev => ({
+          setMetrics((prev) => ({
             ...prev,
             totalEmails: total,
-            unprocessedEmails: unprocessed
+            unprocessedEmails: unprocessed,
           }));
         }
 
         // Obtener emails con tareas
         const tasksResult = await getEmailsWithTasks();
-        if (tasksResult.success && tasksResult.data) {
-          const pending = tasksResult.data.filter(e => e.metadata?.taskStatus === "todo" || e.metadata?.taskStatus === "doing").length;
-          const completed = tasksResult.data.filter(e => e.metadata?.taskStatus === "done").length;
 
-          setMetrics(prev => ({
+        if (tasksResult.success && tasksResult.data) {
+          const pending = tasksResult.data.filter(
+            (e) =>
+              e.metadata?.taskStatus === "todo" ||
+              e.metadata?.taskStatus === "doing"
+          ).length;
+          const completed = tasksResult.data.filter(
+            (e) => e.metadata?.taskStatus === "done"
+          ).length;
+
+          setMetrics((prev) => ({
             ...prev,
             pendingTasks: pending,
-            completedTasks: completed
+            completedTasks: completed,
+          }));
+        }
+
+        // Obtener remitente más frecuente
+        const frequentSenderResult = await getMostFrequentSender();
+        if (frequentSenderResult.success && frequentSenderResult.data) {
+          setMetrics((prev) => ({
+            ...prev,
+            mostFrequentSender: frequentSenderResult.data,
           }));
         }
 
@@ -92,7 +124,6 @@ export default function DashboardPage() {
         if (recentResult.success && recentResult.data) {
           setRecent(recentResult.data);
         }
-
       } catch (err) {
         setError("Error al cargar las métricas");
         console.error("Error loading metrics:", err);
@@ -118,7 +149,9 @@ export default function DashboardPage() {
     return (
       <div className="flex items-center justify-center p-8">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[color:var(--color-primary-500)]"></div>
-        <span className="ml-2 text-[color:var(--color-text-secondary)]">Cargando métricas...</span>
+        <span className="ml-2 text-[color:var(--color-text-secondary)]">
+          Cargando métricas...
+        </span>
       </div>
     );
   }
@@ -159,11 +192,15 @@ export default function DashboardPage() {
             variant="outline"
             size="md"
             loading={refreshing}
-            leftIcon={!refreshing ? <RefreshCw className="w-4 h-4" aria-hidden /> : undefined}
+            leftIcon={
+              !refreshing ? (
+                <RefreshCw className="w-4 h-4" aria-hidden />
+              ) : undefined
+            }
           >
             {refreshing ? "Actualizando..." : "Refrescar"}
           </Button>
-          <ImportEmailsModal onImported={() => window.location.reload()} />
+          {/*<ImportEmailsModal onImported={() => window.location.reload()} />*/}
         </div>
       </div>
 
@@ -203,46 +240,26 @@ export default function DashboardPage() {
         />
       </section>
 
-      {/* Accesos rápidos */}
-      <section className="grid grid-cols-1 sm:grid-cols-2  gap-4">
-        <Link
-          href="/emails"
-          className="card-clickable p-6 flex items-center justify-between"
-          aria-label="Ver todos los emails"
-        >
-          <div>
-            <div className="text-sm text-[color:var(--color-text-muted)] mb-1 uppercase tracking-wide">
-              Acceso rápido
-            </div>
-            <div className="text-lg font-semibold">Ver Todos los Emails</div>
-            <div className="text-sm text-[color:var(--color-text-muted)] mt-1">
-              Tabla interactiva con búsqueda y filtros
-            </div>
-          </div>
-          <ArrowRight className="w-5 h-5 text-[color:var(--color-primary-500)]" aria-hidden />
-        </Link>
+      {/*nuevos metricas*/}
 
-        <Link
-          href="/kanban"
-          className="card-clickable p-6 flex items-center justify-between"
-          aria-label="Ir al Kanban"
-        >
-          <div>
-            <div className="text-sm text-[color:var(--color-text-muted)] mb-1 uppercase tracking-wide">
-              Acceso rápido
-            </div>
-            <div className="text-lg font-semibold">Ir al Kanban</div>
-            <div className="text-sm text-[color:var(--color-text-muted)] mt-1">
-              Tareas por estado (visual)
-            </div>
-          </div>
-          <ArrowRight className="w-5 h-5 text-[color:var(--color-primary-500)]" aria-hidden />
-        </Link>
-
+      {/* Métrica de emails más recurrente */}
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4">
+        <MetricCard
+          label="Email más recurrente"
+          value={
+            metrics.mostFrequentSender
+              ? `${metrics.mostFrequentSender.email} (${metrics.mostFrequentSender.count} emails)`
+              : "Sin datos"
+          }
+          description="Remitente con más emails"
+          Icon={TrendingUp}
+          onClick={() => router.push("/emails")}
+          aria-label="Ver Email más frecuente"
+        />
       </section>
 
       {/* Emails recientes */}
-      <section className="card-base p-4">
+      <section className="card-base p-4 bg-gradient-to-r from-[#b9c9d6] to-[#eef2f3]">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-base font-semibold">Emails Recientes</h3>
           <Link
@@ -255,9 +272,12 @@ export default function DashboardPage() {
 
         {recent.length === 0 ? (
           <div className="text-center py-8">
-            <div className="text-lg font-medium text-[color:var(--color-text-primary)] mb-2">Sin emails recientes</div>
+            <div className="text-lg font-medium text-[color:var(--color-text-primary)] mb-2">
+              Sin emails recientes
+            </div>
             <div className="text-sm text-[color:var(--color-text-secondary)]">
-              Aún no hay datos disponibles. Importa un archivo JSON para comenzar.
+              Aún no hay datos disponibles. Importa un archivo JSON para
+              comenzar.
             </div>
           </div>
         ) : (
@@ -285,6 +305,49 @@ export default function DashboardPage() {
             ))}
           </ul>
         )}
+      </section>
+
+      {/* Accesos rápidos */}
+      <section className="grid grid-cols-1 sm:grid-cols-2  gap-4">
+        <Link
+          href="/emails"
+          className="card-clickable p-6 flex items-center justify-between bg-gradient-to-r from-[#b9c9d6] to-[#eef2f3]"
+          aria-label="Ver todos los emails"
+        >
+          <div>
+            <div className="text-sm text-[color:var(--color-text-muted)] mb-1 uppercase tracking-wide ">
+              Acceso rápido
+            </div>
+            <div className="text-lg font-semibold">Ver Todos los Emails</div>
+            <div className="text-sm text-[color:var(--color-text-muted)] mt-1">
+              Tabla interactiva con búsqueda y filtros
+            </div>
+          </div>
+          <ArrowRight
+            className="w-5 h-5 text-[color:var(--color-primary-500)]"
+            aria-hidden
+          />
+        </Link>
+
+        <Link
+          href="/kanban"
+          className="card-clickable p-6 flex items-center justify-between bg-gradient-to-r from-[#b9c9d6] to-[#eef2f3]"
+          aria-label="Ir al Kanban"
+        >
+          <div>
+            <div className="text-sm text-[color:var(--color-text-muted)] mb-1 uppercase tracking-wide ">
+              Acceso rápido
+            </div>
+            <div className="text-lg font-semibold">Ir al Kanban</div>
+            <div className="text-sm text-[color:var(--color-text-muted)] mt-1">
+              Tareas por estado (visual)
+            </div>
+          </div>
+          <ArrowRight
+            className="w-5 h-5 text-[color:var(--color-primary-500)]"
+            aria-hidden
+          />
+        </Link>
       </section>
     </div>
   );
