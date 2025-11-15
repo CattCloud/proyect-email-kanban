@@ -35,6 +35,7 @@ export interface EmailWithMetadata extends PrismaEmail {
 // Tipos para filtros
 export type EmailFilterEstado = "todos" | "procesado" | "sin-procesar";
 export type EmailFilterCategoria = "todas" | "cliente" | "lead" | "interno" | "spam";
+export type EmailFilterPriority = "todas" | "alta" | "media" | "baja";
 export type SortDirection = "asc" | "desc";
 
 // Tipos para Server Actions

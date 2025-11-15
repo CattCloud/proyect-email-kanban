@@ -264,7 +264,7 @@ export async function deleteEmail(id: string) {
 }
 
 /**
- * Obtener emails con tareas (para el Kanban)
+ * Obtener emails con tareas (para el )
  */
 export async function getEmailsWithTasks() {
   try {

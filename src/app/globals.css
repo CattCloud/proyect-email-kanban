@@ -217,7 +217,7 @@
   --color-bg-active: var(--color-primary-50);
   --color-bg-disabled: var(--color-neutral-100);
   --color-bg-overlay: rgba(59, 59, 59, 0.6);
-  --color-bg-muted: var(--color-primary-100);
+  --color-bg-muted: var(--color-neutral-50);
 
   /* Colores de Texto */
   --color-text-primary: #3b3b3b;
