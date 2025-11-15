@@ -17,6 +17,7 @@ import {
   LogOut as LogOutIcon,
 } from "lucide-react";
 import Button from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 /**
  * Utilidades
@@ -292,36 +293,48 @@ function UserMenu() {
 
   function handleLogout() {
     setOpen(false);
-    // Simular toast con alert (Semana 1)
     alert("Sesión cerrada correctamente");
     router.push("/login");
   }
 
   return (
-    <div className="relative">
-      <Button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        variant="ghost"
-        size="sm"
-        className="px-2 py-1"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        leftIcon={
-          <div
-            className="flex items-center justify-center rounded-full bg-[color:var(--color-primary-100)]"
-            style={{ width: "32px", height: "32px" }}
-            aria-hidden
-          >
-            <UserIcon className="w-4 h-4 text-[color:var(--color-primary-700)]" />
-          </div>
-        }
-      >
-        <span className="text-sm hide-mobile">{mockUser.name}</span>
-      </Button>
+    <div className="flex items-center gap-2">  {/* 👈 CAMBIO 1: Ahora es flex con gap */}
+      
+      {/* 👈 CAMBIO 2: NUEVO - Selector de Tema */}
+      <ThemeToggle />
 
-      {/* Dropdown */}
-      <div
+      {/* Menú de Usuario - Código existente envuelto en div */}
+      <div className="relative">  {/* 👈 CAMBIO 3: El código original ahora está dentro */}
+        <Button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          variant="ghost"
+          size="sm"
+          className="px-2 py-1"
+          aria-haspopup="menu"
+          aria-expanded={open}
+          leftIcon={
+            <div className="flex items-center justify-center rounded-full bg-[color:var(--color-primary-100)]"
+              style={{ width: "32px", height: "32px" }}
+              aria-hidden
+            >
+              <UserIcon className="w-4 h-4 text-[color:var(--color-primary-700)]" />
+            </div>
+          }
+        >
+          <span className="text-sm hide-mobile">{mockUser.name}</span>
+        </Button>
+
+        {/* Dropdown */}
+        <div className={cn(
+            "absolute z-50 right-0 mt-2 w-48 rounded-md border border-[color:var(--color-border-light)] bg-[color:var(--color-bg-card)] shadow-xl animate-slide-down",  // 👈 CAMBIO 4: agregado animate-slide-down
+            open ? "block" : "hidden"
+          )}
+          role="menu"
+          aria-label="Menú de usuario"
+        >
+          {/* ... contenido del dropdown ... */}
+          <div
         className={cn(
           "absolute z-50 right-0 mt-2 w-48 rounded-md border border-[color:var(--color-border-light)] bg-[color:var(--color-bg-card)] shadow-xl",
           open ? "block" : "hidden"
@@ -365,7 +378,18 @@ function UserMenu() {
           Cerrar Sesión
         </Button>
       </div>
-    </div>
+        </div>
+
+        {/* 👈 CAMBIO 5: NUEVO - Overlay para cerrar */}
+        {open && (
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+      </div>
+    </div>  // 👈 CIERRE DEL CONTENEDOR FLEX
   );
 }
 
