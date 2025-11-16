@@ -304,7 +304,12 @@
   
   --color-sin-procesar-bg: var(--color-neutral-100);
   --color-sin-procesar-text: var(--color-neutral-700);
-
+  
+  /* Estados de Aprobación */
+  --color-aprobado-bg: var(--color-secondary-100);
+  --color-aprobado-text: var(--color-secondary-800);
+  --color-aprobado-border: var(--color-secondary-200);
+  
   /* ============================================
    * ESPACIADO COMPLETO
    * ============================================ */
@@ -749,12 +754,19 @@
     background-color: var(--color-procesado-bg);
     color: var(--color-procesado-text);
   }
-
+ 
   .badge-sin-procesar {
     background-color: var(--color-sin-procesar-bg);
     color: var(--color-sin-procesar-text);
   }
 
+  .badge-aprobado {
+    background-color: var(--color-aprobado-bg);
+    color: var(--color-aprobado-text);
+    border: 1px solid var(--color-aprobado-border);
+    font-weight: var(--font-weight-medium);
+  }
+ 
   .badge-email-nuevo {
     background-color: var(--color-primary-100);
     color: var(--color-primary-800);

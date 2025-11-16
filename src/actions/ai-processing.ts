@@ -146,7 +146,7 @@ export async function processEmailsWithAI(emailIds: string[]): Promise<ProcessEm
       }
 
       try {
-        // Transacción por email: upsert de metadata+tasks y contactos
+        // Transacción por email: upsert de metadata+tasks, contactos y marca como procesado por IA
         await prisma.$transaction(async (tx) => {
           // Upsert metadata + tasks
           const mdUpsertArgs = buildEmailMetadataUpsertArgs(email, analysis);
@@ -157,6 +157,12 @@ export async function processEmailsWithAI(emailIds: string[]): Promise<ProcessEm
           for (const args of contactUpserts) {
             await tx.contact.upsert(args);
           }
+
+          // Marcar email como procesado por IA (processedAt != null)
+          await tx.email.update({
+            where: { id: email.id },
+            data: { processedAt: new Date() },
+          });
         });
 
         summary.processed += 1;
@@ -193,7 +199,9 @@ export async function getPendingAIResults(emailIds: string[]): Promise<GenericAc
     const data = await prisma.email.findMany({
       where: {
         id: { in: ids },
-        processedAt: null,
+        // Emails ya procesados por IA pero aún no aprobados
+        processedAt: { not: null },
+        approvedAt: null,
       },
       include: {
         metadata: {
@@ -212,8 +220,8 @@ export async function getPendingAIResults(emailIds: string[]): Promise<GenericAc
 
 /**
  * Confirma o rechaza resultados IA de un email.
- *  - confirmed = true: marca processedAt = now
- *  - confirmed = false: elimina EmailMetadata (+ cascade elimina Tasks), mantiene processedAt = null
+ *  - confirmed = true: marca approvedAt = now (email ya debe estar procesado por IA)
+ *  - confirmed = false: elimina EmailMetadata (+ cascade elimina Tasks) y revierte processedAt/approvedAt a null
  */
 export async function confirmAIResults(emailId: string, confirmed: boolean): Promise<GenericActionResult> {
   try {
@@ -230,19 +238,33 @@ export async function confirmAIResults(emailId: string, confirmed: boolean): Pro
     if (confirmed) {
       const updated = await prisma.email.update({
         where: { id },
-        data: { processedAt: new Date() },
+        data: {
+          // processedAt ya se establece al finalizar processEmailsWithAI
+          approvedAt: new Date(),
+        },
         include: { metadata: { include: { tasks: true } } },
       });
       revalidateSafe("/emails");
       revalidateSafe("/kanban");
-      return { success: true, data: updated, message: "Resultados IA confirmados y marcados como procesados" };
+      return {
+        success: true,
+        data: updated,
+        message: "Resultados IA confirmados y marcados como aprobados",
+      };
     } else {
-      // Rechazar: eliminar metadata (tasks en cascade), mantener processedAt = null
+      // Rechazar: eliminar metadata (tasks en cascade) y revertir a estado "No procesado"
       await prisma.$transaction(async (tx) => {
         await tx.emailMetadata.deleteMany({ where: { emailId: id } });
-        await tx.email.update({ where: { id }, data: { processedAt: null } });
+        await tx.email.update({
+          where: { id },
+          data: {
+            processedAt: null,
+            approvedAt: null,
+          },
+        });
       });
       revalidateSafe("/emails");
+      revalidateSafe("/kanban");
       return { success: true, message: "Resultados IA rechazados y limpiados" };
     }
   } catch (error) {
@@ -278,7 +300,9 @@ export async function getPendingAllAIResults(): Promise<GenericActionResult> {
   try {
     const data = await prisma.email.findMany({
       where: {
-        processedAt: null,
+        // Emails ya procesados por IA pero aún no aprobados
+        processedAt: { not: null },
+        approvedAt: null,
         // Deben existir resultados IA a revisar (metadata creada)
         metadata: { isNot: null },
       },

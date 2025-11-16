@@ -16,11 +16,14 @@ model Email {
   receivedAt DateTime       @default(now())
   createdAt  DateTime       @default(now()) // Fecha de importación del email
   processedAt DateTime?     // Null = no procesado, fecha = procesado en esa fecha
+  approvedAt DateTime?      // Null = no aprobado aún, fecha = aprobado en esa fecha
   metadata   EmailMetadata?
 
   @@index([from])
   @@index([subject])
   @@index([processedAt])
+  @@index([approvedAt])
+  @@index([processedAt, approvedAt])
   @@index([receivedAt])
   @@index([createdAt])
   @@index([idEmail])

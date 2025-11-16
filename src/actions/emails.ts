@@ -41,15 +41,23 @@ const UpdateEmailSchema = z.object({
   subject: z.string().min(1, "El asunto es requerido").optional(),
   body: z.string().min(1, "El contenido es requerido").optional(),
   processedAt: z.string().nullable().optional(),
+  approvedAt: z.string().nullable().optional(),
   metadata: EmailMetadataSchema.optional(),
   idEmail: z.string().min(1, "El ID del email es requerido").optional()
 })
 
-// Tipos exportados
-export type EmailData = z.infer<typeof EmailSchema>
-export type EmailMetadataData = z.infer<typeof EmailMetadataSchema>
-export type CreateEmailData = z.infer<typeof CreateEmailSchema>
-export type UpdateEmailData = z.infer<typeof UpdateEmailSchema>
+// Schemas para operaciones de aprobación
+const ApproveEmailSchema = z.object({
+  emailId: z.string().min(1, "Email ID requerido")
+})
+
+const UnapproveEmailSchema = z.object({
+  emailId: z.string().min(1, "Email ID requerido")
+})
+
+const GetEmailsByApprovalStatusSchema = z.object({
+  status: z.enum(["approved", "not-approved", "all"])
+})
 
 // Schema para validación de importación JSON (Product Brief actualizado)
 const ImportEmailSchema = z.object({
@@ -65,6 +73,17 @@ const ImportEmailSchema = z.object({
 
 const ImportEmailsSchema = z.array(ImportEmailSchema)
 
+// Tipos exportados
+export type EmailData = z.infer<typeof EmailSchema>
+export type EmailMetadataData = z.infer<typeof EmailMetadataSchema>
+export type CreateEmailData = z.infer<typeof CreateEmailSchema>
+export type UpdateEmailData = z.infer<typeof UpdateEmailSchema>
+
+// Tipos para operaciones de aprobación
+export type ApproveEmailData = z.infer<typeof ApproveEmailSchema>
+export type UnapproveEmailData = z.infer<typeof UnapproveEmailSchema>
+export type GetEmailsByApprovalStatusData = z.infer<typeof GetEmailsByApprovalStatusSchema>
+
 export type ImportEmailData = z.infer<typeof ImportEmailSchema>
 export type ImportEmailsData = z.infer<typeof ImportEmailsSchema>
 
@@ -78,6 +97,14 @@ export interface ImportResult {
     error: string;
   }>;
   total: number;
+}
+
+/**
+ * Función auxiliar para validar si un email puede ser aprobado
+ * Regla de negocio: Solo emails con processedAt != null pueden ser aprobados
+ */
+function canApproveEmail(email: { processedAt: Date | null, approvedAt: Date | null }): boolean {
+  return email.processedAt !== null && email.approvedAt === null
 }
 
 // Server Actions
@@ -201,6 +228,7 @@ export async function updateEmail(id: string, data: UpdateEmailData) {
         ...(validatedData.subject && { subject: validatedData.subject }),
         ...(validatedData.body && { body: validatedData.body }),
         ...(validatedData.processedAt !== undefined && { processedAt: validatedData.processedAt }),
+        ...(validatedData.approvedAt !== undefined && { approvedAt: validatedData.approvedAt }),
         // Actualizar metadata si se proporciona
         ...(validatedData.metadata && {
           metadata: existingEmail.metadata ? {
@@ -264,7 +292,160 @@ export async function deleteEmail(id: string) {
 }
 
 /**
- * Obtener emails con tareas (para el )
+ * Aprobar un email procesado por IA
+ * @param emailId - ID del email a aprobar
+ * @returns Resultado con el email actualizado o error
+ * @throws Error si el email no existe o no ha sido procesado
+  */ 
+export async function approveEmail(emailId: string) {
+  try {
+    // Validar entrada con Zod
+    const validatedData = ApproveEmailSchema.parse({ emailId })
+    
+    // Verificar que el email existe
+    const email = await prisma.email.findUnique({
+      where: { id: validatedData.emailId }
+    })
+    
+    if (!email) {
+      return { 
+        success: false, 
+        error: "Email no encontrado" 
+      }
+    }
+    
+    // Validar regla de negocio: solo emails procesados pueden ser aprobados
+    if (!canApproveEmail(email)) {
+      if (email.processedAt === null) {
+        return { 
+          success: false, 
+          error: "Solo se pueden aprobar emails procesados por IA" 
+        }
+      } else if (email.approvedAt !== null) {
+        return { 
+          success: false, 
+          error: "Este email ya fue aprobado anteriormente" 
+        }
+      }
+    }
+    
+    // Actualizar approvedAt
+    const updatedEmail = await prisma.email.update({
+      where: { id: validatedData.emailId },
+      data: { approvedAt: new Date() },
+      include: { metadata: true }
+    })
+    
+    // Revalidar cachés
+    revalidatePath("/emails")
+    revalidatePath(`/emails/${validatedData.emailId}`)
+    revalidatePath("/")
+    
+    return { 
+      success: true, 
+      data: updatedEmail,
+      message: "Email aprobado exitosamente" 
+    }
+  } catch (error) {
+    console.error("Error al aprobar email:", error)
+    return { 
+      success: false, 
+      error: "Error al aprobar el email" 
+    }
+  }
+}
+
+/**
+ * Desaprobar un email (revertir aprobación)
+ * @param emailId - ID del email a desaprobar
+ * @returns Resultado con el email actualizado o error
+ * @throws Error si el email no existe o no está aprobado
+ */
+export async function unapproveEmail(emailId: string) {
+  try {
+    // Validar entrada con Zod
+    const validatedData = UnapproveEmailSchema.parse({ emailId })
+    
+    // Verificar que el email existe y está aprobado
+    const email = await prisma.email.findUnique({
+      where: { id: validatedData.emailId }
+    })
+    
+    if (!email) {
+      return { 
+        success: false, 
+        error: "Email no encontrado" 
+      }
+    }
+    
+    if (email.approvedAt === null) {
+      return { 
+        success: false, 
+        error: "Este email no está aprobado" 
+      }
+    }
+    
+    // Actualizar approvedAt a null
+    const updatedEmail = await prisma.email.update({
+      where: { id: validatedData.emailId },
+      data: { approvedAt: null },
+      include: { metadata: true }
+    })
+    
+    // Revalidar cachés
+    revalidatePath("/emails")
+    revalidatePath(`/emails/${validatedData.emailId}`)
+    revalidatePath("/")
+    
+    return { 
+      success: true, 
+      data: updatedEmail,
+      message: "Email desaprobado exitosamente" 
+    }
+  } catch (error) {
+    console.error("Error al desaprobar email:", error)
+    return { 
+      success: false, 
+      error: "Error al desaprobar el email" 
+    }
+  }
+}
+
+/**
+ * Obtener emails filtrados por estado de aprobación
+ * @param status - Filtro: "approved", "not-approved", "all"
+ * @returns Lista de emails con metadata completa
+ */
+export async function getEmailsByApprovalStatus(status: "approved" | "not-approved" | "all") {
+  try {
+    // Validar entrada con Zod
+    const validatedData = GetEmailsByApprovalStatusSchema.parse({ status })
+    
+    // Construir cláusula where basada en el filtro
+    const whereClause = validatedData.status === "approved" 
+      ? { processedAt: { not: null }, approvedAt: { not: null } }
+      : validatedData.status === "not-approved"
+      ? { processedAt: { not: null }, approvedAt: null }
+      : {}; // "all" devuelve todos
+    
+    const emails = await prisma.email.findMany({
+      where: whereClause,
+      include: { metadata: true },
+      orderBy: { receivedAt: 'desc' }
+    })
+    
+    return { success: true, data: emails }
+  } catch (error) {
+    console.error("Error al obtener emails por estado de aprobación:", error)
+    return {
+      success: false,
+      error: "Error al obtener los emails por estado de aprobación"
+    }
+  }
+}
+
+/**
+ * Obtener emails con tareas (para el Kanban)
  */
 export async function getEmailsWithTasks() {
   try {

@@ -1,19 +1,61 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 type Theme = "light" | "dark" | "system";
 
-export function useTheme() {
-  const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof window === "undefined") return "system";
-    try {
-      const saved = localStorage.getItem("theme") as Theme | null;
-      return saved || "system";
-    } catch {
-      return "system";
+// Store para manejar el tema de forma sincronizada
+const themeStore = {
+  theme: "system" as Theme,
+  listeners: new Set<() => void>(),
+  
+  getSnapshot() {
+    return themeStore.theme;
+  },
+  
+  getServerSnapshot() {
+    return "system" as Theme;
+  },
+  
+  subscribe(listener: () => void) {
+    themeStore.listeners.add(listener);
+    return () => themeStore.listeners.delete(listener);
+  },
+  
+  setTheme(newTheme: Theme) {
+    themeStore.theme = newTheme;
+    themeStore.listeners.forEach(listener => listener());
+  },
+  
+  initialize() {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("theme") as Theme | null;
+        if (saved) {
+          themeStore.theme = saved;
+        }
+      } catch {
+        // noop
+      }
     }
-  });
+  }
+};
+
+// Inicializar en el cliente
+if (typeof window !== "undefined") {
+  themeStore.initialize();
+}
+
+export function useTheme() {
+  const theme = useSyncExternalStore(
+    themeStore.subscribe,
+    themeStore.getSnapshot,
+    themeStore.getServerSnapshot
+  );
+
+  const setTheme = (newTheme: Theme) => {
+    themeStore.setTheme(newTheme);
+  };
 
   useEffect(() => {
     const root = document.documentElement;

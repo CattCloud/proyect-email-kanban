@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { GripVertical, Mail } from "lucide-react";
+import { GripVertical, Mail, Check } from "lucide-react";
 import { EmailWithMetadata } from "@/types";
 
 /**
@@ -83,6 +83,12 @@ export default function TaskCard({ email }: { email: EmailWithMetadata }) {
             {email.metadata.category}
           </span>
         ) : null}
+        {email.approvedAt !== null && (
+          <span className="badge-aprobado inline-flex items-center px-2 py-1 rounded text-xs">
+            <Check className="w-3 h-3 mr-1" aria-hidden />
+            Aprobado
+          </span>
+        )}
       </div>
     </div>
   );

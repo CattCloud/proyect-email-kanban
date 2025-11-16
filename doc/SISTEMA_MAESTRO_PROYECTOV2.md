@@ -416,6 +416,42 @@ model Email {
   receivedAt  DateTime       @default(now())
   createdAt   DateTime       @default(now())
   processedAt DateTime?      // Null = no procesado, fecha = procesado
+  approvedAt  DateTime?      // Null = no aprobado aún, fecha = aprobado
+  metadata    EmailMetadata? // Relación 1:1 con metadata
+
+  @@index([from])
+  @@index([subject])
+  @@index([processedAt])
+  @@index([approvedAt])
+  @@index([processedAt, approvedAt])
+  @@index([receivedAt])
+  @@index([createdAt])
+  @@index([idEmail])
+}
+
+model EmailMetadata {
+  id              String  @id @default(cuid())
+  emailId         String  @unique
+  category        String? // 'cliente' | 'lead' | 'interno' | 'spam'
+  priority        String? // 'alta' | 'media' | 'baja'
+  hasTask         Boolean @default(false)
+  taskDescription String?
+  taskStatus      String?
+  email           Email   @relation(fields: [emailId], references: [id], onDelete: Cascade)
+
+  @@index([category, priority, hasTask, taskStatus]) // Índices para consultas
+}
+```
+```typescript
+model Email {
+  id          String         @id @default(cuid())
+  idEmail     String         @unique
+  from        String         // Email del remitente
+  subject     String         // Asunto del email
+  body        String         // Contenido completo
+  receivedAt  DateTime       @default(now())
+  createdAt   DateTime       @default(now())
+  processedAt DateTime?      // Null = no procesado, fecha = procesado
   metadata    EmailMetadata? // Relación 1:1 con metadata
 
   @@index([processedAt])
@@ -495,6 +531,24 @@ export interface EmailMetadata {
 
 ## 7. Servicios y Acciones del Backend ✅ COMPLETAMENTE IMPLEMENTADO
 
+### 7.1 Server Actions Implementadas
+
+**Archivo principal:** [`src/actions/emails.ts`](src/actions/emails.ts)
+
+**10 Server Actions funcionando:**
+
+| Función | Línea | Propósito | Estado |
+|---------|-------|-----------|--------|
+| [`getEmails()`](src/actions/emails.ts:115) | 115-134 | Obtener todos los emails con metadata | ✅ Implementado |
+| [`getEmailById()`](src/actions/emails.ts:139) | 139-160 | Obtener email específico | ✅ Implementado |
+| [`createEmail()`](src/actions/emails.ts:165) | 165-202 | Crear nuevo email | ✅ Implementado |
+| [`updateEmail()`](src/actions/emails.ts:207) | 207-259 | Actualizar email y metadata | ✅ Implementado |
+| [`deleteEmail()`](src/actions/emails.ts:264) | 264-292 | Eliminar email (hard delete) | ✅ Implementado |
+| [`approveEmail()`](src/actions/emails.ts:300) | 300-356 | Aprobar email procesado por IA | ✅ Implementado |
+| [`unapproveEmail()`](src/actions/emails.ts:364) | 364-412 | Desaprobar email (revertir aprobación) | ✅ Implementado |
+| [`getEmailsByApprovalStatus()`](src/actions/emails.ts:419) | 419-445 | Filtrar emails por estado de aprobación | ✅ Implementado |
+| [`getEmailsWithTasks()`](src/actions/emails.ts:450) | 450-476 | Emails con tareas para Kanban | ✅ Implementado |
+| [`importEmailsFromJSON()`](src/actions/emails.ts:506) | 506-612 | Importación masiva con validación | ✅ Implementado |
 ### 7.1 Server Actions Implementadas
 
 **Archivo principal:** [`src/actions/emails.ts`](src/actions/emails.ts)

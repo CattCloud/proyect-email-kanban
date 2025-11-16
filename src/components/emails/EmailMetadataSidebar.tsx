@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeCheck, AlertTriangle, ClipboardList, ChevronDown, ChevronUp, Tag, Activity } from "lucide-react";
+import { BadgeCheck, AlertTriangle, ClipboardList, ChevronDown, ChevronUp, Tag, Activity, Check } from "lucide-react";
 import { EmailWithMetadata } from "@/types";
 import { useState } from "react";
 import Button from "@/components/ui/button";
@@ -39,21 +39,21 @@ export default function EmailMetadataSidebar({ email }: Props) {
     categoria === "cliente"
       ? "badge-categoria-cliente"
       : categoria === "lead"
-      ? "badge-categoria-lead"
-      : categoria === "interno"
-      ? "badge-categoria-interno"
-      : categoria === "spam"
-      ? "badge-categoria-spam"
-      : "";
+        ? "badge-categoria-lead"
+        : categoria === "interno"
+          ? "badge-categoria-interno"
+          : categoria === "spam"
+            ? "badge-categoria-spam"
+            : "";
 
   const prioridadClass =
     prioridad === "alta"
       ? "badge-prioridad-alta"
       : prioridad === "media"
-      ? "badge-prioridad-media"
-      : prioridad === "baja"
-      ? "badge-prioridad-baja"
-      : "";
+        ? "badge-prioridad-media"
+        : prioridad === "baja"
+          ? "badge-prioridad-baja"
+          : "";
 
   return (
     <aside
@@ -66,7 +66,7 @@ export default function EmailMetadataSidebar({ email }: Props) {
           <Activity className="w-4 h-4" aria-hidden />
           Estado de procesamiento
         </h3>
-        <div>
+        <div className="flex gap-1">
           {email.processedAt !== null ? (
             <span className="badge-procesado inline-flex items-center gap-1 px-2 py-1 rounded text-xs">
               <BadgeCheck className="w-3 h-3" aria-hidden />
@@ -89,6 +89,12 @@ export default function EmailMetadataSidebar({ email }: Props) {
               </Button>
             </div>
           )}
+          {email.approvedAt !== null && (
+            <span className="badge-aprobado inline-flex items-center gap-1 px-2 py-1 rounded text-xs">
+              <Check className="w-3 h-2" aria-hidden />
+              Aprobado
+            </span>
+          )} 
         </div>
       </section>
 
@@ -167,18 +173,17 @@ export default function EmailMetadataSidebar({ email }: Props) {
                     {taskStatus === "todo"
                       ? "Por hacer"
                       : taskStatus === "doing"
-                      ? "En progreso"
-                      : taskStatus === "done"
-                      ? "Completado"
-                      : "—"}
+                        ? "En progreso"
+                        : taskStatus === "done"
+                          ? "Completado"
+                          : "—"}
                   </strong>
                 </span>
               </Button>
 
               <ul
-                className={`absolute left-0 right-0 mt-1 rounded-md border border-[color:var(--color-border-light)] bg-[color:var(--color-bg-card)] shadow-xl text-sm ${
-                  openTaskState ? "block" : "hidden"
-                }`}
+                className={`absolute left-0 right-0 mt-1 rounded-md border border-[color:var(--color-border-light)] bg-[color:var(--color-bg-card)] shadow-xl text-sm ${openTaskState ? "block" : "hidden"
+                  }`}
                 role="listbox"
                 aria-label="Seleccionar estado (simulado)"
               >

@@ -25,6 +25,7 @@ export interface PrismaEmail {
   receivedAt: Date;
   createdAt: Date; // Fecha de importación del email
   processedAt: Date | null; // Null = no procesado, fecha = procesado
+  approvedAt: Date | null; // Null = no aprobado, fecha = aprobado
   metadata?: EmailMetadata | null;
 }
 
@@ -33,9 +34,10 @@ export interface EmailWithMetadata extends PrismaEmail {
 }
 
 // Tipos para filtros
-export type EmailFilterEstado = "todos" | "procesado" | "sin-procesar";
+export type EmailFilterEstado = "todos" | "procesado" | "sin-procesar" | "aprobado";
 export type EmailFilterCategoria = "todas" | "cliente" | "lead" | "interno" | "spam";
 export type EmailFilterPriority = "todas" | "alta" | "media" | "baja";
+export type EmailFilterAprobacion = "todos" | "aprobado" | "no-aprobado";
 export type SortDirection = "asc" | "desc";
 
 // Tipos para Server Actions

@@ -1,9 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Mail, CalendarDays, Tag, AlertCircle, CheckCircle, Edit3, Archive, ShieldAlert, KanbanSquare } from "lucide-react";
+import { ArrowLeft, Mail, CalendarDays, Tag, AlertCircle, CheckCircle, Edit3, Archive, ShieldAlert, KanbanSquare, Check } from "lucide-react";
 import Button from "@/components/ui/button";
-import { updateEmail } from "@/actions/emails";
+import { updateEmail, approveEmail } from "@/actions/emails";
 import { EmailWithMetadata } from "@/types";
 
 type EmailDetailViewProps = {
@@ -23,6 +24,8 @@ type EmailDetailViewProps = {
  */
 export default function EmailDetailView({ email, onBack }: EmailDetailViewProps) {
   const router = useRouter();
+  const [approving, setApproving] = useState(false);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
 
   const goBack = () => {
     if (onBack) onBack();
@@ -85,6 +88,34 @@ export default function EmailDetailView({ email, onBack }: EmailDetailViewProps)
     } catch (error) {
       alert("Error al archivar email");
       console.error("Error archiving email:", error);
+    }
+  };
+
+  const handleApprove = async () => {
+    // Regla de negocio: solo emails procesados pueden ser aprobados
+    if (email.processedAt === null) {
+      setApprovalError("Solo se pueden aprobar emails procesados por IA");
+      return;
+    }
+
+    try {
+      setApproving(true);
+      setApprovalError(null);
+
+      const result = await approveEmail(email.id);
+
+      if (result.success) {
+        alert(result.message ?? "Email aprobado exitosamente");
+        // Forzar recarga de datos actualizados desde el servidor
+        router.refresh();
+      } else {
+        setApprovalError(result.error || "Error al aprobar email");
+      }
+    } catch (error) {
+      console.error("Error al aprobar email:", error);
+      setApprovalError("Error de conexión al servidor");
+    } finally {
+      setApproving(false);
     }
   };
 
@@ -167,6 +198,21 @@ export default function EmailDetailView({ email, onBack }: EmailDetailViewProps)
           Archivar
         </Button>
 
+        {email.processedAt !== null && email.approvedAt === null && (
+          <Button
+            type="button"
+            onClick={handleApprove}
+            variant="secondary"
+            size="md"
+            leftIcon={<Check className="w-4 h-4" aria-hidden />}
+            aria-label="Aprobar email"
+            loading={approving}
+            disabled={approving}
+          >
+            {approving ? "Aprobando..." : "Aprobar Email"}
+          </Button>
+        )}
+
         {email.metadata?.hasTask ? (
           <Button
             type="button"
@@ -182,8 +228,18 @@ export default function EmailDetailView({ email, onBack }: EmailDetailViewProps)
         ) : null}
       </div>
 
-      {/* Estado procesado/sin procesar rápido (badge) */}
-      <div className="flex items-center gap-2 text-xs">
+      {approvalError && (
+        <div
+          className="text-sm text-[color:var(--color-error-text)] mt-2"
+          role="alert"
+        >
+          {approvalError}
+        </div>
+      )}
+
+      {/* Estado procesado/sin procesar rápido (badge) 
+      
+            <div className="flex items-center gap-2 text-xs">
         {email.processedAt !== null ? (
           <span className="badge-procesado inline-flex items-center gap-1 px-2 py-1 rounded">
             <CheckCircle className="w-3 h-3" aria-hidden />
@@ -195,6 +251,14 @@ export default function EmailDetailView({ email, onBack }: EmailDetailViewProps)
             Aún sin procesar
           </span>
         )}
+
+        {email.approvedAt !== null && (
+          <span className="badge-aprobado inline-flex items-center gap-1 px-2 py-1 rounded">
+            <Check className="w-3 h-3" aria-hidden />
+            Aprobado
+          </span>
+        )}
+
         {email.metadata?.category ? (
           <span
             className={`inline-flex items-center gap-1 px-2 py-1 rounded ${
@@ -212,6 +276,9 @@ export default function EmailDetailView({ email, onBack }: EmailDetailViewProps)
           </span>
         ) : null}
       </div>
+      
+      */}
+
     </section>
   );
 }

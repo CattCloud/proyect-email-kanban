@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronUp, Sparkles, RefreshCw } from "lucide-react";
+import { ChevronDown, ChevronUp, Sparkles, RefreshCw, Check } from "lucide-react";
 import SearchBar from "@/components/shared/SearchBar";
 import Button from "@/components/ui/button";
 import { getEmails } from "@/actions/emails";
@@ -13,6 +13,7 @@ import {
   EmailWithMetadata,
   EmailFilterEstado,
   EmailFilterCategoria,
+  EmailFilterAprobacion,
   SortDirection
 } from "@/types";
 import type { Email as PrismaEmail, EmailMetadata as PrismaEmailMetadata } from "@prisma/client";
@@ -74,6 +75,7 @@ export default function EmailTable() {
   const [page, setPage] = useState(1);
   const [filterEstado, setFilterEstado] = useState<EmailFilterEstado>("sin-procesar");
   const [filterCategoria, setFilterCategoria] = useState<EmailFilterCategoria>("todas");
+  const [filterAprobacion, setFilterAprobacion] = useState<EmailFilterAprobacion>("todos");
   
   // Data State
   const [emails, setEmails] = useState<EmailWithMetadata[]>([]);
@@ -143,13 +145,32 @@ export default function EmailTable() {
   const filtered = useMemo(() => {
     let data = [...emails];
 
-    // Filtro por estado (procesado / sin procesar)
+    // Filtro por estado (no procesado / procesado / aprobado)
     if (filterEstado !== "todos") {
-      data = data.filter(e => (filterEstado === "procesado" ? e.processedAt !== null : e.processedAt === null));
+      data = data.filter((e) => {
+        if (filterEstado === "procesado") {
+          return e.processedAt !== null;
+        }
+        if (filterEstado === "sin-procesar") {
+          return e.processedAt === null;
+        }
+        // "aprobado"
+        return e.processedAt !== null && e.approvedAt !== null;
+      });
     }
     // Filtro por categoría
     if (filterCategoria !== "todas") {
       data = data.filter(e => e.metadata?.category === filterCategoria);
+    }
+    // Filtro por aprobación
+    if (filterAprobacion !== "todos") {
+      data = data.filter(e => {
+        if (filterAprobacion === "aprobado") {
+          return e.processedAt !== null && e.approvedAt !== null;
+        }
+        // "no-aprobado"
+        return e.processedAt !== null && e.approvedAt === null;
+      });
     }
     // Búsqueda
     if (query.trim() !== "") {
@@ -174,7 +195,7 @@ export default function EmailTable() {
       return cb - ca; // Siempre descendente para createdAt
     });
     return data;
-  }, [emails, query, sortDir, filterEstado, filterCategoria]);
+  }, [emails, query, sortDir, filterEstado, filterCategoria, filterAprobacion]);
 
   // Paginación
   const total = filtered.length;
@@ -319,6 +340,7 @@ export default function EmailTable() {
             <option value="todos">Todos</option>
             <option value="procesado">Procesado</option>
             <option value="sin-procesar">Sin procesar</option>
+            <option value="aprobado">Aprobado</option>
           </select>
 
           {/* Filtro categoría */}
@@ -441,6 +463,13 @@ export default function EmailTable() {
                         ) : (
                           <span className="badge-sin-procesar inline-flex items-center px-2 py-1 rounded text-xs">Sin procesar</span>
                         )}
+                        {/* Badge de aprobación */}
+                        {e.processedAt !== null && e.approvedAt !== null && (
+                          <span className="badge-aprobado inline-flex items-center px-2 py-1 rounded text-xs">
+                            <Check className="w-3 h-3 mr-1" aria-hidden />
+                            Aprobado
+                          </span>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -473,6 +502,13 @@ export default function EmailTable() {
                       <span className="badge-procesado inline-flex items-center px-2 py-1 rounded text-xs">Procesado</span>
                     ) : (
                       <span className="badge-sin-procesar inline-flex items-center px-2 py-1 rounded text-xs">Sin procesar</span>
+                    )}
+                    {/* Badge de aprobación */}
+                    {e.processedAt !== null && e.approvedAt !== null && (
+                      <span className="badge-aprobado inline-flex items-center px-2 py-1 rounded text-xs">
+                        <Check className="w-3 h-3 mr-1" aria-hidden />
+                        Aprobado
+                      </span>
                     )}
                     {/* Badge de categoría si existe */}
                     {e.metadata?.category ? (
