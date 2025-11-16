@@ -259,7 +259,7 @@ export default function DashboardPage() {
       </section>
 
       {/* Emails recientes */}
-      <section className="card-base p-4 bg-gradient-to-r from-[#b9c9d6] to-[#eef2f3]">
+      <section className="card-base p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-base font-semibold">Emails Recientes</h3>
           <Link
@@ -311,7 +311,7 @@ export default function DashboardPage() {
       <section className="grid grid-cols-1 sm:grid-cols-2  gap-4">
         <Link
           href="/emails"
-          className="card-clickable p-6 flex items-center justify-between bg-gradient-to-r from-[#b9c9d6] to-[#eef2f3]"
+          className="card-clickable p-6 flex items-center justify-between"
           aria-label="Ver todos los emails"
         >
           <div>
@@ -331,7 +331,7 @@ export default function DashboardPage() {
 
         <Link
           href="/kanban"
-          className="card-clickable p-6 flex items-center justify-between bg-gradient-to-r from-[#b9c9d6] to-[#eef2f3]"
+          className="card-clickable p-6 flex items-center justify-between"
           aria-label="Ir al Kanban"
         >
           <div>

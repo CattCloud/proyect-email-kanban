@@ -25,7 +25,7 @@ export default function MetricCard({
   "aria-label": ariaLabel,
 }: MetricCardProps) {
   const Content = (
-    <div className="metric-card card-clickable bg-gradient-to-r from-[#b9c9d6] to-[#eef2f3]">
+    <div className="metric-card card-clickable">
       {Icon ? <Icon className="metric-card-icon" aria-hidden /> : null}
       <div className="metric-card-label">{label}</div>
       <div className="metric-card-value">{value}</div>
