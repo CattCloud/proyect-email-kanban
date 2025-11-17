@@ -13,11 +13,13 @@ import {
   TrendingUp,
 } from "lucide-react";
 import MetricCard from "@/components/dashboard/MetricCard";
+import CategoryChart from "@/components/dashboard/CategoryChart";
+import PriorityChart from "@/components/dashboard/PriorityChart";
 import {
   getEmails,
   getEmailsWithTasks,
   getRecentEmails,
-  getMostFrequentSender,
+  getMostFrequentSender,getEmailsByCategory,getEmailsByPriority 
 } from "@/actions/emails";
 import Button from "@/components/ui/button";
 import { DashboardMetrics } from "@/types";
@@ -51,6 +53,19 @@ function formatRelative(iso: string): string {
   return `${day} ${month} ${year}`;
 }
 
+// 👇 NUEVO TYPE para datos del gráfico
+type CategoryData = {
+  name: string;
+  value: number;
+  color: string;
+};
+
+type PriorityData = {
+  name: string;
+  value: number;
+  fill: string;
+};
+
 export default function DashboardPage() {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
@@ -67,6 +82,9 @@ export default function DashboardPage() {
   });
 
   const [recent, setRecent] = useState<EmailWithMetadata[]>([]);
+
+const [categoryData, setCategoryData] = useState<CategoryData[]>([]); 
+const [priorityData, setPriorityData] = useState<PriorityData[]>([]);
 
   // useEffect para cargar datos reales
   useEffect(() => {
@@ -118,6 +136,18 @@ export default function DashboardPage() {
             mostFrequentSender: frequentSenderResult.data,
           }));
         }
+
+         // 👇 NUEVO: Obtener datos de categorías para el gráfico
+        const categoryResult = await getEmailsByCategory();
+        if (categoryResult.success && categoryResult.data) {
+          setCategoryData(categoryResult.data);
+        }
+
+        // Obtener datos de prioridades para el gráfico
+const priorityResult = await getEmailsByPriority();
+if (priorityResult.success && priorityResult.data) {
+  setPriorityData(priorityResult.data);
+}
 
         // Obtener emails recientes (últimos 5)
         const recentResult = await getRecentEmails(5);
@@ -242,7 +272,7 @@ export default function DashboardPage() {
 
       {/*nuevos metricas*/}
 
-      {/* Métrica de emails más recurrente */}
+       
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4">
         <MetricCard
           label="Email más recurrente"
@@ -257,6 +287,32 @@ export default function DashboardPage() {
           aria-label="Ver Email más frecuente"
         />
       </section>
+
+
+{/*  SECCIÓN: Gráficos de Categorías y Prioridades */}
+<section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+  
+  {/* Gráfico de categorías - 2 columnas */}
+  <div className="sm:col-span-1 lg:col-span-2">
+    <CategoryChart 
+      data={categoryData}
+      onClick={() => router.push("/emails")}
+    />     
+  </div>
+
+  {/*  Gráfico de prioridades - 2 columnas */}
+  <div className="sm:col-span-1 lg:col-span-2">
+    <PriorityChart 
+      data={priorityData}
+      onClick={() => router.push("/emails")}
+    />
+  </div>
+
+</section>
+       
+
+
+
 
       {/* Emails recientes */}
       <section className="card-base p-4">

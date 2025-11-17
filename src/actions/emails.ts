@@ -659,3 +659,150 @@ export async function getMostFrequentSender() {
     };
   }
 }
+
+
+/**
+ * Obtiene el conteo de emails por categoría desde EmailMetadata
+ * Retorna un array con el conteo por cada categoría
+ */
+export async function getEmailsByCategory() {
+  try {
+    // Obtener todos los metadatos con categoría
+    const emailsWithMetadata = await prisma.email.findMany({
+      include: {
+        metadata: {
+          select: {
+            category: true,
+          },
+        },
+      },
+    });
+
+    // Contar emails por categoría
+    const categoryCounts = {
+      cliente: 0,
+      lead: 0,
+      interno: 0,
+      spam: 0,
+    };
+
+    for (const email of emailsWithMetadata) {
+      if (email.metadata?.category) {
+        const category = email.metadata.category.toLowerCase();
+        if (category in categoryCounts) {
+          categoryCounts[category as keyof typeof categoryCounts]++;
+        }
+      }
+    }
+
+    // Convertir a formato para el gráfico
+    const data = [
+      { name: "cliente", value: categoryCounts.cliente, color: "var(--color-categoria-cliente-text)" },
+      { name: "lead", value: categoryCounts.lead, color: "var(--color-categoria-lead-text)" },
+      { name: "interno", value: categoryCounts.interno, color: "var(--color-categoria-interno-text)" },
+      { name: "spam", value: categoryCounts.spam, color: "var(--color-categoria-spam-text)" },
+    ];
+
+    return {
+      success: true,
+      data,
+    };
+  } catch (error) {
+    console.error("Error getting emails by category:", error);
+    return {
+      success: false,
+      error: "Error al obtener emails por categoría",
+      data: [],
+    };
+  }
+}
+
+
+
+/**
+ * Obtiene el conteo de emails por prioridad desde EmailMetadata
+ * Retorna un array con el conteo por cada prioridad
+ */
+export async function getEmailsByPriority() {
+  try {
+    // Obtener todos los emails con su metadata
+    const emailsWithMetadata = await prisma.email.findMany({
+      include: {
+        metadata: {
+          select: {
+            priority: true,
+          },
+        },
+      },
+    });
+
+    console.log("📧 Total de emails para prioridad:", emailsWithMetadata.length);
+
+    // Contar emails por prioridad
+    const priorityCounts = {
+      alta: 0,
+      media: 0,
+      baja: 0,
+      sinPrioridad: 0,
+    };
+
+    for (const email of emailsWithMetadata) {
+      if (email.metadata?.priority) {
+        const priority = email.metadata.priority.toLowerCase().trim();
+        console.log(`📨 Email ${email.id}: prioridad="${priority}"`);
+        
+        if (priority in priorityCounts) {
+          priorityCounts[priority as keyof typeof priorityCounts]++;
+        } else {
+          console.warn(`⚠️ Prioridad desconocida: "${priority}"`);
+        }
+      } else {
+        priorityCounts.sinPrioridad++;
+        console.log(`📭 Email ${email.id}: sin metadata o sin prioridad`);
+      }
+    }
+
+    console.log("📊 Conteo final por prioridad:", priorityCounts);
+
+    // Convertir a formato para el gráfico de barras
+    const data = [
+      { 
+        name: "alta", 
+        value: priorityCounts.alta,
+        fill: "#a1353a" // --color-danger-800
+      },
+      { 
+        name: "media", 
+        value: priorityCounts.media,
+        fill: "#92400e" // --color-warning-800
+      },
+      { 
+        name: "baja", 
+        value: priorityCounts.baja,
+        fill: "#596366" // --color-neutral-700
+      },
+    ];
+
+    // Si no hay ningún email con prioridad, retornar null
+    const total = data.reduce((sum, item) => sum + item.value, 0);
+    if (total === 0) {
+      console.log("⚠️ No se encontraron emails con prioridad asignada");
+      return {
+        success: true,
+        data: null,
+      };
+    }
+
+    return {
+      success: true,
+      data,
+    };
+  } catch (error) {
+    console.error("❌ Error getting emails by priority:", error);
+    return {
+      success: false,
+      error: "Error al obtener emails por prioridad",
+      data: null,
+    };
+  }
+}
