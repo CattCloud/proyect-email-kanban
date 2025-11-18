@@ -2,9 +2,8 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { navigationItems } from "@/lib/mock-data/navigation";
-import { mockUser } from "@/lib/mock-data/user";
 import {
   Home as HomeIcon,
   Mail as MailIcon,
@@ -18,6 +17,7 @@ import {
 } from "lucide-react";
 import Button from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useSession, signOut } from "next-auth/react";
 
 /**
  * Utilidades
@@ -130,7 +130,10 @@ export function Sidebar({
                 >
                   <Lucide
                     name={iconName}
-                    className={cn("w-5 h-5 shrink-0 sidebar-nav-icon", !collapsed && "mr-3")}
+                    className={cn(
+                      "w-5 h-5 shrink-0 sidebar-nav-icon",
+                      !collapsed && "mr-3"
+                    )}
                   />
                   {!collapsed && <span className="text-sm">{item.label}</span>}
                 </Link>
@@ -226,7 +229,10 @@ export function MobileSidebar({
                       active && "sidebar-nav-item-active"
                     )}
                   >
-                    <Lucide name={iconName} className="w-5 h-5 mr-3 shrink-0 sidebar-nav-icon" />
+                    <Lucide
+                      name={iconName}
+                      className="w-5 h-5 mr-3 shrink-0 sidebar-nav-icon"
+                    />
                     <span className="text-sm">{item.label}</span>
                   </Link>
                 </li>
@@ -285,21 +291,51 @@ export function Breadcrumbs() {
 }
 
 /**
- * Menú de Usuario
+ * Utilidad: iniciales del usuario para el avatar
+ */
+function getUserInitials(nameOrEmail?: string | null): string {
+  if (!nameOrEmail) return "U";
+
+  const trimmed = nameOrEmail.trim();
+  if (!trimmed) return "U";
+
+  const parts = trimmed.split(" ");
+  if (parts.length === 1) {
+    // Si es un email, intentar usar la primera letra antes de "@"
+    const atIndex = trimmed.indexOf("@");
+    if (atIndex > 0) {
+      return trimmed[0]?.toUpperCase() ?? "U";
+    }
+    return trimmed[0]?.toUpperCase() ?? "U";
+  }
+
+  const first = parts[0][0];
+  const last = parts[parts.length - 1][0];
+  return `${first ?? "U"}${last ?? ""}`.toUpperCase();
+}
+
+/**
+ * Menú de Usuario (basado en sesión de NextAuth)
  */
 function UserMenu() {
-  const router = useRouter();
+  const { data: session, status } = useSession();
   const [open, setOpen] = useState(false);
 
-  function handleLogout() {
+  const isLoading = status === "loading";
+  const displayName =
+    session?.user?.name ?? session?.user?.email ?? "Usuario";
+  const displayEmail = session?.user?.email ?? "Sin email";
+  const initials = getUserInitials(session?.user?.name || session?.user?.email);
+
+  async function handleLogout() {
     setOpen(false);
-    alert("Sesión cerrada correctamente");
-    router.push("/login");
+    await signOut({
+      callbackUrl: "/login",
+    });
   }
 
   return (
     <div className="flex items-center gap-2">
-      
       {/* Selector de Tema */}
       <ThemeToggle />
 
@@ -313,20 +349,36 @@ function UserMenu() {
           className="px-2 py-1"
           aria-haspopup="menu"
           aria-expanded={open}
+          disabled={isLoading}
           leftIcon={
-            <div className="flex items-center justify-center rounded-full bg-[color:var(--color-primary-100)]"
+            <div
+              className="flex items-center justify-center rounded-full bg-[color:var(--color-primary-100)]"
               style={{ width: "32px", height: "32px" }}
               aria-hidden
             >
-              <UserIcon className="w-4 h-4 text-[color:var(--color-primary-700)]" />
+              {session?.user?.image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={session.user.image}
+                  alt={displayName}
+                  className="w-8 h-8 rounded-full object-cover"
+                />
+              ) : (
+                <span className="text-xs font-medium text-[color:var(--color-primary-700)]">
+                  {initials}
+                </span>
+              )}
             </div>
           }
         >
-          <span className="text-sm hide-mobile">{mockUser.name}</span>
+          <span className="text-sm hide-mobile">
+            {isLoading ? "Cargando..." : displayName}
+          </span>
         </Button>
 
         {/* Dropdown */}
-        <div className={cn(
+        <div
+          className={cn(
             "absolute z-50 right-0 mt-2 w-48 rounded-md border border-[color:var(--color-border-light)] bg-[color:var(--color-bg-card)] shadow-xl animate-slide-down",
             open ? "block" : "hidden"
           )}
@@ -334,7 +386,7 @@ function UserMenu() {
           aria-label="Menú de usuario"
         >
           <div className="px-3 py-2 text-xs text-[color:var(--color-text-muted)]">
-            {mockUser.email}
+            {displayEmail}
           </div>
           <div className="h-px bg-[color:var(--color-border-light)]" />
           <Button
@@ -470,7 +522,7 @@ export function ProtectedShell({ children }: { children: React.ReactNode }) {
           <Header onOpenMobile={() => setMobileOpen(true)} />
           <main className="container-padding py-6">{children}</main>
           <footer className="h-[var(--footer-height)] flex items-center justify-center text-xs text-[color:var(--color-text-muted)]">
-            © 2025 Sistema de Gestión de Emails | Versión 1.0 
+            © 2025 Sistema de Gestión de Emails | Versión 1.0
           </footer>
         </div>
       </div>

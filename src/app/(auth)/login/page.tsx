@@ -1,20 +1,33 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Mail } from "lucide-react";
+import { signIn, useSession } from "next-auth/react";
 import Button from "@/components/ui/button";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { status } = useSession();
   const [loading, setLoading] = useState(false);
 
-  function handleLogin() {
-    // Loading simulado por 1 segundo antes de navegar a /emails
-    setLoading(true);
-    setTimeout(() => {
+  // Si ya hay sesión, redirigir automáticamente a /emails
+  useEffect(() => {
+    if (status === "authenticated") {
       router.push("/emails");
-    }, 1000);
+    }
+  }, [status, router]);
+
+  async function handleLogin() {
+    try {
+      setLoading(true);
+      await signIn("google", {
+        callbackUrl: "/emails",
+      });
+      // Nota: signIn normalmente redirige; no siempre se ejecuta el código siguiente.
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -46,11 +59,11 @@ export default function LoginPage() {
         <Button
           type="button"
           onClick={handleLogin}
-          loading={loading}
+          loading={loading || status === "loading"}
           className="w-full"
           variant="primary"
           size="md"
-          aria-label="Continuar con Google"
+          aria-label="Iniciar sesión con Google"
           leftIcon={
             <svg
               className="w-5 h-5"
@@ -77,12 +90,13 @@ export default function LoginPage() {
             </svg>
           }
         >
-          Continuar con Google
+          Iniciar sesión con Google
         </Button>
 
         {/* Footer legal */}
         <p className="text-[color:var(--color-text-muted)] text-xs text-center mt-6">
-          Al continuar, aceptas nuestros términos de servicio.
+          Al continuar, aceptas nuestros términos de servicio y el uso de tu cuenta
+          de Google únicamente para autenticación (perfil y email).
         </p>
       </section>
     </main>
