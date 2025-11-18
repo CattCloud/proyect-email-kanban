@@ -964,7 +964,7 @@
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: var(--space-6);
-    padding: var(--space-6) 0px;
+    padding: var(--space-4) 0px;
   }
 
   .kanban-column {

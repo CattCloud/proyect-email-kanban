@@ -13,6 +13,7 @@ const SYSTEM_CONTEXT = `
 Eres un asistente de IA especializado en análisis de emails comerciales para ejecutivos.
 Tu objetivo es extraer metadata estructurada y tareas accionables desde correos electrónicos.
 Los resultados se visualizarán en un tablero Kanban; prioriza claridad y concisión.
+Aprende de los rechazos previos para mejorar continuamente la calidad de tu análisis.
 `.trim();
 
 const MAIN_INSTRUCTIONS = `
@@ -27,6 +28,7 @@ Para cada email del array proporcionado, debes analizar y extraer:
 IMPORTANTE:
 - Procesa TODOS los emails del array proporcionado
 - Devuelve un array JSON con un objeto por email, en el mismo orden
+- Si un email tiene feedback de rechazo previo, ajusta tu análisis según las indicaciones
 `.trim();
 
 const DECISION_CRITERIA = `
@@ -63,6 +65,27 @@ Buenas prácticas:
 ✅ Reutilizar: "reunion", "documento", "cotizacion", "demo"
 ✅ Proponer nueva: "migracion-datos" (si es tema recurrente)
 ❌ Evitar: "reunion-con-juan", "doc-temporal", "cosa-urgente"
+`.trim();
+
+const REJECTION_FEEDBACK_STRATEGY = `
+Manejo de Feedback de Rechazo:
+Si un email incluye información de rechazo previo, debes:
+
+1. ANALIZAR el motivo del rechazo cuidadosamente
+2. COMPARAR el resultado descartado con el contenido real del email
+3. IDENTIFICAR qué aspecto específico falló (categoría, prioridad, tareas, resumen)
+4. CORREGIR el error aplicando un razonamiento diferente
+5. EVITAR repetir exactamente el mismo análisis descartado
+
+Guía según tipo de rechazo:
+- "Categoría incorrecta": Reconsidera la clasificación desde cero, busca señales alternativas
+- "Prioridad mal asignada": Reevalúa criterios de urgencia y contexto temporal
+- "Tareas mal extraídas": Lee el email línea por línea, valida cada acción contra el contenido
+- "Resumen poco útil": Captura la intención principal con verbos de acción claros
+- Feedback libre del usuario: Ajusta específicamente según su indicación textual
+
+CRÍTICO: Si el resultado descartado clasificó como "spam" y fue rechazado, considera fuertemente otras categorías.
+Si extrajo tareas inexistentes, valida cada tarea contra oraciones reales del email.
 `.trim();
 
 const OUTPUT_FORMAT = `
@@ -136,6 +159,7 @@ const CONSTRAINTS = `
 - Valida emails en participants y evita duplicados
 - Usa UTC (terminado en Z) para due_date cuando corresponda
 - CRÍTICO: Prioriza etiquetas del catálogo existente antes de proponer nuevas
+- CRÍTICO: Si hay feedback de rechazo, NO repitas el mismo error del análisis anterior
 `.trim();
 
 function sanitizeEmailsForAI(emails: EmailInput[]): EmailInput[] {
@@ -147,8 +171,48 @@ function sanitizeEmailsForAI(emails: EmailInput[]): EmailInput[] {
 }
 
 /**
+ * Construye sección de feedback de rechazo si existe
+ */
+function buildRejectionFeedbackSection(email: EmailInput): string {
+  // Verificar si el email tiene información de rechazo previo
+  if (!email.rejectionReason || !email.previousAIResult) {
+    return "";
+  }
+
+  return `
+═══════════════════════════════════════════════════════════════
+## ⚠️ FEEDBACK DE RECHAZO PREVIO PARA EMAIL "${email.id}"
+
+Este email fue procesado anteriormente y el usuario RECHAZÓ el resultado.
+
+📌 Motivo del rechazo: "${email.rejectionReason}"
+
+❌ Resultado DESCARTADO anterior:
+${JSON.stringify(email.previousAIResult, null, 2)}
+
+⚠️ INSTRUCCIONES CRÍTICAS PARA ESTE EMAIL:
+1. NO repitas los mismos errores del análisis anterior
+2. Presta especial atención al área que causó el rechazo
+3. Si el motivo menciona "Categoría": reconsidera completamente la clasificación
+4. Si el motivo menciona "Tareas": lee el email línea por línea de nuevo y valida cada acción
+5. Si el motivo menciona "Prioridad": reevalúa los criterios de urgencia desde cero
+6. Si el motivo menciona "Resumen": reformula capturando la intención principal de forma clara
+7. Si es feedback libre del usuario: ajusta tu razonamiento según su indicación específica
+8. Compara tu nuevo análisis con el descartado y asegúrate de corregir el problema identificado
+
+EJEMPLO DE CORRECCIÓN:
+Si rejectionReason = "Categoría incorrecta" y previousAIResult.category = "spam"
+→ Evita clasificar como spam nuevamente, considera primero "cliente", "lead" o "interno"
+
+Si rejectionReason = "Tareas mal extraídas" y previousAIResult.tasks = [tarea inexistente]
+→ Lee el cuerpo del email oración por oración y extrae solo acciones explícitas mencionadas
+═══════════════════════════════════════════════════════════════
+`;
+}
+
+/**
  * Construye el prompt para procesamiento de emails con IA
- * @param emails - Array de emails a procesar
+ * @param emails - Array de emails a procesar (puede incluir rejectionReason y previousAIResult)
  * @param existingTags - Array de etiquetas existentes en el sistema (opcional)
  */
 export function buildEmailProcessingPrompt(
@@ -157,6 +221,7 @@ export function buildEmailProcessingPrompt(
 ): string {
   const safe = sanitizeEmailsForAI(emails);
   const emailsJSON = JSON.stringify(safe, null, 2);
+  
   const tagsSection =
     existingTags.length > 0
       ? `
@@ -178,6 +243,12 @@ No hay etiquetas registradas en el sistema aún.
 Propón etiquetas estratégicas y reutilizables según los criterios definidos.
 `;
 
+  // Construir secciones de feedback de rechazo para emails que lo tengan
+  const rejectionSections = emails
+    .map((email) => buildRejectionFeedbackSection(email))
+    .filter((section) => section.length > 0)
+    .join("\n");
+
   return `
 ${SYSTEM_CONTEXT}
 
@@ -190,6 +261,9 @@ ${DECISION_CRITERIA}
 ═══════════════════════════════════════════════════════════════
 ${TAGS_STRATEGY}
 ${tagsSection}
+═══════════════════════════════════════════════════════════════
+${REJECTION_FEEDBACK_STRATEGY}
+${rejectionSections}
 ═══════════════════════════════════════════════════════════════
 ${OUTPUT_FORMAT}
 
@@ -206,6 +280,7 @@ ${emailsJSON}
 INSTRUCCIÓN FINAL:
 Devuelve ÚNICAMENTE un array JSON válido con ${emails.length} elementos, en el mismo orden.
 Si hay etiquetas existentes, ÚSALAS prioritariamente. Solo propón nuevas si son estratégicas.
+Si algún email tiene feedback de rechazo, corrige específicamente el error señalado.
 Comienza tu respuesta con "[" y termina con "]".
 `.trim();
 }

@@ -4,11 +4,14 @@
  */
 
 // Exportar tipos de email
-export * from './email';
+export * from "./email";
 
 // Exportar tipos de IA
-export * from './ai';
+export * from "./ai";
+
+// Exportar tipos de Kanban por contacto
+export * from "./kanban";
+
 // Aquí se agregarán futuras exportaciones de otros tipos:
 // export * from './user';
-// export * from './kanban';
 // export * from './dashboard';

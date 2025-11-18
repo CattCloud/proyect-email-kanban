@@ -9,6 +9,7 @@ import {
   buildEmailMetadataUpsertArgs,
   buildContactsUpserts,
 } from "@/lib/ai-mapper";
+import { normalizeTagLabel } from "@/lib/tag-utils";
 import type { EmailAnalysis } from "@/types/ai";
 
 // Wrapper seguro para revalidación (evita fallos en entorno de tests/CLI)
@@ -118,19 +119,70 @@ export async function processEmailsWithAI(emailIds: string[]): Promise<ProcessEm
     });
 
     if (emails.length === 0) {
-      return { ...summary, success: false, processed: 0, errors: [{ emailId: "-", error: "No se encontraron emails" }] };
+      return {
+        ...summary,
+        success: false,
+        processed: 0,
+        errors: [{ emailId: "-", error: "No se encontraron emails" }],
+      };
     }
 
     // Mapear a input IA
     const aiInputs = emails.map(mapEmailToAIInput);
 
-    // Llamar a OpenAI
-    const aiResult = await processEmailsBatch(aiInputs);
+    // HITO 2: Cargar catálogo de etiquetas existentes para el prompt de IA
+    const tagRowsForPrompt = await prisma.tag.findMany({
+      orderBy: { descripcion: "asc" },
+      select: { descripcion: true },
+    });
+    const existingTags = tagRowsForPrompt.map((t) => t.descripcion);
+
+    // Llamar a OpenAI con catálogo de etiquetas existentes
+    const aiResult = await processEmailsBatch(aiInputs, existingTags);
 
     summary.modelUsed = aiResult.modelUsed;
     summary.usage = aiResult.usage;
     if (aiResult.errors?.length) {
       summary.validationErrors = aiResult.errors;
+    }
+
+    // HITO 3: Detectar y registrar nuevas etiquetas propuestas por IA
+    try {
+      const normalizedFromAI = new Set<string>();
+
+      for (const analysis of aiResult.analyses as EmailAnalysis[]) {
+        for (const task of analysis.tasks ?? []) {
+          for (const rawTag of task.tags ?? []) {
+            const normalized = normalizeTagLabel(rawTag);
+            if (normalized) {
+              normalizedFromAI.add(normalized);
+            }
+          }
+        }
+      }
+
+      if (normalizedFromAI.size > 0) {
+        const normalizedList = Array.from(normalizedFromAI);
+
+        // Consultar cuáles ya existen en Tag
+        const existingTagRows = await prisma.tag.findMany({
+          where: { descripcion: { in: normalizedList } },
+          select: { descripcion: true },
+        });
+        const existingNormalizedSet = new Set(existingTagRows.map((t) => t.descripcion));
+
+        const newTags = normalizedList.filter((t) => !existingNormalizedSet.has(t));
+
+        if (newTags.length > 0) {
+          await prisma.tag.createMany({
+            data: newTags.map((descripcion) => ({ descripcion })),
+            skipDuplicates: true, // idempotencia ante condiciones de carrera
+          });
+        }
+      }
+    } catch (tagError) {
+      console.error("Error al registrar nuevas etiquetas en Tag:", tagError);
+      // Importante: no interrumpir el flujo principal de procesamiento
     }
 
     // Index rápido por ID de email en BD
@@ -168,7 +220,10 @@ export async function processEmailsWithAI(emailIds: string[]): Promise<ProcessEm
         summary.processed += 1;
       } catch (err) {
         console.error(`Fallo al persistir análisis para email ${emailId}:`, err);
-        summary.errors.push({ emailId, error: "Error al guardar resultados IA en base de datos" });
+        summary.errors.push({
+          emailId,
+          error: "Error al guardar resultados IA en base de datos",
+        });
       }
     }
 
@@ -189,9 +244,9 @@ export async function processEmailsWithAI(emailIds: string[]): Promise<ProcessEm
 /**
  * Obtiene resultados IA pendientes de revisión:
  *  - Emails con processedAt === null
- *  - Incluye EmailMetadata + Tasks (recientemente generados)
- *  - Filtra por IDs específicos
- */
+ *  *  - Incluye EmailMetadata + Tasks (recientemente generados)
+ *  *  - Filtra por IDs específicos
+ *  */
 export async function getPendingAIResults(emailIds: string[]): Promise<GenericActionResult> {
   try {
     const ids = EmailIdsSchema.parse(emailIds);
@@ -223,7 +278,10 @@ export async function getPendingAIResults(emailIds: string[]): Promise<GenericAc
  *  - confirmed = true: marca approvedAt = now (email ya debe estar procesado por IA)
  *  - confirmed = false: elimina EmailMetadata (+ cascade elimina Tasks) y revierte processedAt/approvedAt a null
  */
-export async function confirmAIResults(emailId: string, confirmed: boolean): Promise<GenericActionResult> {
+export async function confirmAIResults(
+  emailId: string,
+  confirmed: boolean
+): Promise<GenericActionResult> {
   try {
     const id = SingleEmailIdSchema.parse(emailId);
 

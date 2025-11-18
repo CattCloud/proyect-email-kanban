@@ -288,3 +288,161 @@ revalidatePath(`/emails/${id}`); // Para actualizaciones específicas
 **Validación:** Zod schemas completos
 **Caché:** Revalidación automática implementada
 **Testing:** Pendiente de implementación
+
+---
+
+## API de Kanban por contacto (Semana 4 - Hito 1)
+
+Estas Server Actions viven en `src/actions/kanban.ts` y están pensadas para el **Kanban por contacto** trabajando a nivel de tareas (`Task`), no solo a nivel de `EmailMetadata`.
+
+### `getKanbanTasks(filters?)`
+
+Obtiene la lista de tareas para el tablero Kanban, opcionalmente filtradas por contactos y por estado de la tarea.
+
+```ts
+type TaskStatus = "todo" | "doing" | "done";
+
+type GetKanbanTasksInput = {
+  contactIds?: string[];        // IDs de Contact seleccionados
+  contactEmails?: string[];     // Emails de contacto seleccionados
+  statuses?: TaskStatus[];      // Estados a filtrar
+};
+
+export async function getKanbanTasks(
+  rawInput?: GetKanbanTasksInput
+): Promise&lt;KanbanTasksResult&gt;;
+```
+
+**Reglas de negocio:**
+
+- Solo considera tareas cuyos emails tengan `processedAt != null` (emails procesados por IA).
+- El filtro de contactos se resuelve siempre a una lista de emails:
+  - Si hay `contactIds`, se buscan sus emails en la tabla `Contact`.
+  - Se combinan con `contactEmails` (si se pasan) y se eliminan duplicados.
+- El filtro por estado:
+  - Si `statuses` está vacío o no se pasa, devuelve tareas en cualquier estado.
+  - Si se pasa, aplica `status IN (statuses)` sobre `Task.status`.
+
+**Retorno (`KanbanTasksResult`):**
+
+```ts
+export interface KanbanTask {
+  id: string;               // Task.id
+  description: string;      // Task.description
+  status: TaskStatus;       // Task.status
+  dueDate: Date | null;     // Task.dueDate
+  tags: string[];           // Task.tags
+  participants: string[];   // Task.participants
+  createdAt: Date;          // Task.createdAt
+
+  emailId: string;          // Email.id
+  emailSubject: string;     // Email.subject
+  emailFrom: string;        // Email.from
+
+  contactId: string | null;   // Contact.id (si existe)
+  contactName: string | null; // Contact.name (si existe)
+  contactEmail: string;       // Email principal del contacto
+}
+
+export interface KanbanTasksResult {
+  success: boolean;
+  data?: KanbanTask[];
+  error?: string;
+}
+```
+
+---
+
+### `getKanbanContacts()`
+
+Obtiene los contactos relevantes para el **selector múltiple de contactos** del Kanban, con contadores de tareas asociados a cada contacto.
+
+```ts
+export async function getKanbanContacts(): Promise&lt;KanbanContactsResult&gt;;
+```
+
+**Estrategia:**
+
+- Parte de las tareas (`Task`) existentes en base de datos.
+- Agrupa por `Email.from` (remitente del email origen de la tarea).
+- Busca, para cada email, un registro en la tabla `Contact` (si existe).
+- Calcula contadores por estado:
+
+```ts
+export interface KanbanContact {
+  id: string;              // Contact.id o el propio email como fallback
+  name: string | null;     // Contact.name si existe
+  email: string;           // Email del contacto (clave principal)
+  createdAt: Date;         // Contact.createdAt o Date(0) como fallback
+
+  totalTasks?: number;
+  todoTasks?: number;
+  doingTasks?: number;
+  doneTasks?: number;
+}
+
+export interface KanbanContactsResult {
+  success: boolean;
+  data?: KanbanContact[];
+  error?: string;
+}
+```
+
+**Notas:**
+
+- Solo se devuelven contactos con al menos **una tarea asociada**.
+- El orden por defecto es por nombre ascendente y luego por email ascendente.
+
+---
+
+### `updateKanbanTaskStatus({ taskId, status })`
+
+Actualiza el estado (`todo`, `doing`, `done`) de una tarea Kanban específica.
+
+```ts
+type UpdateTaskStatusInput = {
+  taskId: string;      // Task.id
+  status: TaskStatus;  // "todo" | "doing" | "done"
+};
+
+export async function updateKanbanTaskStatus(
+  rawInput: UpdateTaskStatusInput
+): Promise&lt;KanbanTaskOperationResult&gt;;
+```
+
+**Validaciones y comportamiento:**
+
+- Valida entrada con Zod:
+  - `taskId` requerido y no vacío.
+  - `status` ∈ {`todo`, `doing`, `done`}.
+- Verifica que la tarea exista y carga su `EmailMetadata` + `Email`.
+- Ejecuta una **transacción Prisma** para:
+  1. Actualizar `Task.status` al nuevo estado.
+  2. Sincronizar campos legacy en `EmailMetadata`:
+     - `taskStatus` = nuevo estado.
+     - `hasTask` = `true`.
+     - `taskDescription` = `Task.description` (para mantener compatibilidad).
+- Revalida rutas relacionadas:
+  - `/kanban`
+  - `/dashboard`
+  - `/emails`
+
+**Retorno (`KanbanTaskOperationResult`):**
+
+```ts
+export interface KanbanTaskOperationResult {
+  success: boolean;
+  data?: KanbanTask; // Tarea ya mapeada al modelo de Kanban
+  error?: string;
+  message?: string;
+}
+```
+
+**Manejo de errores:**
+
+- Si la tarea no existe o no tiene `EmailMetadata` asociada:
+  - `success: false`
+  - `error: "Tarea no encontrada"`
+- Si ocurre un error inesperado en BD:
+  - `success: false`
+  - `error: "Error al actualizar el estado de la tarea"`

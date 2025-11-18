@@ -1,95 +1,155 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { GripVertical, Mail, Check } from "lucide-react";
-import { EmailWithMetadata } from "@/types";
+import { useDraggable } from "@dnd-kit/core";
+import { GripVertical, Mail, Check, Tag as TagIcon } from "lucide-react";
+import type { KanbanTask } from "@/types";
 
 /**
- * TaskCard: card de tarea para el tablero Kanban (HU-UI-004)
- * - Muestra asunto, prioridad, categoría, remitente y descripción de tarea
+ * TaskCard: card de tarea para el tablero Kanban (Semana 4)
+ * - Representa UNA tarea (KanbanTask) generada desde un email
+ * - Muestra:
+ *   - Contacto principal (nombre/email)
+ *   - Asunto del email origen
+ *   - Descripción breve de la tarea
+ *   - Etiquetas de la tarea (tags)
+ *   - Badges de categoría y prioridad (si existen)
+ *   - Estado de aprobado (si aplica)
  * - Click navega al detalle del email (/emails/[id])
- * - Usa clases definidas en globals.css: .kanban-card, badges y utilidades de truncado
+ * - HITO 4: Hace la tarjeta draggable con @dnd-kit/core (id = task.id)
  */
-export default function TaskCard({ email }: { email: EmailWithMetadata }) {
+export default function TaskCard({ task }: { task: KanbanTask }) {
   const router = useRouter();
 
   const prioridadClass =
-    email.metadata?.priority === "alta"
+    task.priority === "alta"
       ? "badge-prioridad-alta"
-      : email.metadata?.priority === "media"
+      : task.priority === "media"
       ? "badge-prioridad-media"
-      : email.metadata?.priority === "baja"
+      : task.priority === "baja"
       ? "badge-prioridad-baja"
       : "";
 
   const categoriaClass =
-    email.metadata?.category === "cliente"
+    task.category === "cliente"
       ? "badge-categoria-cliente"
-      : email.metadata?.category === "lead"
+      : task.category === "lead"
       ? "badge-categoria-lead"
-      : email.metadata?.category === "interno"
+      : task.category === "interno"
       ? "badge-categoria-interno"
-      : email.metadata?.category === "spam"
+      : task.category === "spam"
       ? "badge-categoria-spam"
       : "";
 
+  const contactLabel =
+    task.contactName && task.contactName.trim().length > 0
+      ? `${task.contactName} · ${task.contactEmail}`
+      : task.contactEmail;
+
+  const handleOpenEmail = () => {
+    router.push(`/emails/${task.emailId}`);
+  };
+
+  // HITO 4: hacer la tarjeta draggable
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({
+      id: task.id,
+    });
+
+  const style =
+    transform != null
+      ? {
+          transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+        }
+      : undefined;
+
   return (
     <div
+      ref={setNodeRef}
+      style={style}
+      // listeners + attributes para dnd-kit (teclado y ratón)
+      {...listeners}
+      {...attributes}
       role="button"
       tabIndex={0}
-      onClick={() => router.push(`/emails/${email.id}`)}
+      onClick={handleOpenEmail}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          router.push(`/emails/${email.id}`);
+          handleOpenEmail();
         }
       }}
-      className="kanban-card"
-      aria-label={`Abrir email: ${email.subject}`}
+      className={`kanban-card ${
+        isDragging ? "opacity-70 shadow-lg ring-2 ring-[color:var(--color-primary-300)]" : ""
+      }`}
+      aria-label={`Abrir email: ${task.emailSubject}`}
     >
-      {/* Drag handle */}
+      {/* Drag handle + contacto */}
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs text-[color:var(--color-text-muted)]">
-          {/* Remitente compacto */}
           <span className="inline-flex items-center gap-1">
             <Mail className="w-3 h-3" aria-hidden />
-            {email.from}
+            {contactLabel}
           </span>
         </span>
-        <GripVertical className="w-4 h-4 text-[color:var(--color-text-muted)]" aria-hidden />
+        <GripVertical
+          className="w-4 h-4 text-[color:var(--color-text-muted)] cursor-grab active:cursor-grabbing"
+          aria-hidden
+        />
       </div>
 
-      {/* Asunto */}
-      <div className="font-semibold text-[color:var(--color-text-primary)] truncate-2-lines mb-2">
-        {email.subject}
+      {/* Asunto del email */}
+      <div className="font-semibold text-[color:var(--color-text-primary)] truncate-2-lines mb-1">
+        {task.emailSubject}
       </div>
 
-      {/* Descripción de tarea (si existe) */}
-      {email.metadata?.hasTask && email.metadata?.taskDescription ? (
-        <div className="text-sm text-[color:var(--color-text-secondary)] truncate-3-lines mb-3">
-          {email.metadata.taskDescription}
-        </div>
-      ) : null}
+      {/* Descripción de tarea */}
+      <div className="text-sm text-[color:var(--color-text-secondary)] truncate-3-lines mb-2">
+        {task.description}
+      </div>
 
-      {/* Badges */}
-      <div className="flex flex-wrap items-center gap-2">
-        {email.metadata?.priority ? (
-          <span className={`inline-flex items-center px-2 py-1 rounded text-xs ${prioridadClass}`}>
-            {email.metadata.priority}
-          </span>
-        ) : null}
-        {email.metadata?.category ? (
-          <span className={`inline-flex items-center px-2 py-1 rounded text-xs ${categoriaClass}`}>
-            {email.metadata.category}
-          </span>
-        ) : null}
-        {email.approvedAt !== null && (
-          <span className="badge-aprobado inline-flex items-center px-2 py-1 rounded text-xs">
-            <Check className="w-3 h-3 mr-1" aria-hidden />
-            Aprobado
-          </span>
+      {/* Footer: Tags y Badges en la misma fila */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mt-4">
+        {/* Tags */}
+        {task.tags && task.tags.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1">
+            <TagIcon className="w-3 h-3 text-[color:var(--color-text-muted)]" aria-hidden />
+            {task.tags.map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center px-2 py-[2px] rounded-full text-[10px] bg-[color:var(--color-bg-soft)] border border-[color:var(--color-border-subtle)] text-[color:var(--color-text-muted)]"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
         )}
+
+        {/* Badges */}
+        <div className="flex flex-wrap items-center gap-2">
+          {task.priority && (
+            <span
+              className={`inline-flex items-center px-2 py-1 rounded text-xs ${prioridadClass}`}
+            >
+              {task.priority}
+            </span>
+          )}
+          {task.category && (
+            <span
+              className={`inline-flex items-center px-2 py-1 rounded text-xs ${categoriaClass}`}
+            >
+              {task.category}
+            </span>
+          )}
+          {task.approvedAt && (
+            <span className="badge-aprobado inline-flex items-center px-2 py-1 rounded text-xs">
+              <Check className="w-3 h-3 mr-1" aria-hidden />
+              Aprobado
+            </span>
+          )}
+        </div>
       </div>
+
     </div>
   );
 }

@@ -298,13 +298,13 @@ function UserMenu() {
   }
 
   return (
-    <div className="flex items-center gap-2">  {/* 👈 CAMBIO 1: Ahora es flex con gap */}
+    <div className="flex items-center gap-2">
       
-      {/* 👈 CAMBIO 2: NUEVO - Selector de Tema */}
+      {/* Selector de Tema */}
       <ThemeToggle />
 
-      {/* Menú de Usuario - Código existente envuelto en div */}
-      <div className="relative">  {/* 👈 CAMBIO 3: El código original ahora está dentro */}
+      {/* Menú de Usuario */}
+      <div className="relative">
         <Button
           type="button"
           onClick={() => setOpen((v) => !v)}
@@ -327,60 +327,50 @@ function UserMenu() {
 
         {/* Dropdown */}
         <div className={cn(
-            "absolute z-50 right-0 mt-2 w-48 rounded-md border border-[color:var(--color-border-light)] bg-[color:var(--color-bg-card)] shadow-xl animate-slide-down",  // 👈 CAMBIO 4: agregado animate-slide-down
+            "absolute z-50 right-0 mt-2 w-48 rounded-md border border-[color:var(--color-border-light)] bg-[color:var(--color-bg-card)] shadow-xl animate-slide-down",
             open ? "block" : "hidden"
           )}
           role="menu"
           aria-label="Menú de usuario"
         >
-          {/* ... contenido del dropdown ... */}
-          <div
-        className={cn(
-          "absolute z-50 right-0 mt-2 w-48 rounded-md border border-[color:var(--color-border-light)] bg-[color:var(--color-bg-card)] shadow-xl",
-          open ? "block" : "hidden"
-        )}
-        role="menu"
-        aria-label="Menú de usuario"
-      >
-        <div className="px-3 py-2 text-xs text-[color:var(--color-text-muted)]">
-          {mockUser.email}
-        </div>
-        <div className="h-px bg-[color:var(--color-border-light)]" />
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start gap-2"
-          disabled
-          leftIcon={<UserIcon className="w-4 h-4" />}
-        >
-          Mi Perfil
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start gap-2"
-          disabled
-          leftIcon={<UserIcon className="w-4 h-4" />}
-        >
-          Configuración
-        </Button>
-        <div className="h-px bg-[color:var(--color-border-light)]" />
-        <Button
-          type="button"
-          onClick={handleLogout}
-          variant="destructive"
-          size="sm"
-          className="w-full justify-start gap-2"
-          leftIcon={<LogOutIcon className="w-4 h-4" />}
-        >
-          Cerrar Sesión
-        </Button>
-      </div>
+          <div className="px-3 py-2 text-xs text-[color:var(--color-text-muted)]">
+            {mockUser.email}
+          </div>
+          <div className="h-px bg-[color:var(--color-border-light)]" />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start gap-2"
+            disabled
+            leftIcon={<UserIcon className="w-4 h-4" />}
+          >
+            Mi Perfil
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start gap-2"
+            disabled
+            leftIcon={<UserIcon className="w-4 h-4" />}
+          >
+            Configuración
+          </Button>
+          <div className="h-px bg-[color:var(--color-border-light)]" />
+          <Button
+            type="button"
+            onClick={handleLogout}
+            variant="destructive"
+            size="sm"
+            className="w-full justify-start gap-2"
+            leftIcon={<LogOutIcon className="w-4 h-4" />}
+          >
+            Cerrar Sesión
+          </Button>
         </div>
 
-        {/* 👈 CAMBIO 5: NUEVO - Overlay para cerrar */}
+        {/* Overlay para cerrar */}
         {open && (
           <div
             className="fixed inset-0 z-40"
@@ -389,7 +379,7 @@ function UserMenu() {
           />
         )}
       </div>
-    </div>  // 👈 CIERRE DEL CONTENEDOR FLEX
+    </div>
   );
 }
 
@@ -428,33 +418,44 @@ export function Header({
 }
 
 /**
+ * Hook personalizado para manejar el estado del sidebar con localStorage
+ */
+function useSidebarCollapsed() {
+  const [collapsed, setCollapsed] = useState(() => {
+    // Solo leer de localStorage en el cliente
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("sidebar-collapsed");
+        return saved === "true";
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  });
+
+  // Persistir cambios en localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("sidebar-collapsed", String(collapsed));
+      } catch {
+        // noop
+      }
+    }
+  }, [collapsed]);
+
+  return [collapsed, setCollapsed] as const;
+}
+
+/**
  * ProtectedShell: contenedor de layout para páginas protegidas
  * - Maneja estado de sidebar (colapsable) y overlay móvil
  * - Se usa dentro de /app/(protected)/layout.tsx
  */
 export function ProtectedShell({ children }: { children: React.ReactNode }) {
-  // Inicializa el estado desde localStorage (SSR-safe)
-  const [collapsed, setCollapsed] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      const saved = localStorage.getItem("sidebar-collapsed");
-      return saved === "true";
-    } catch {
-      return false;
-    }
-  });
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  // Persistir estado de colapsado en localStorage
-  useEffect(() => {
-    try {
-      if (typeof window !== "undefined") {
-        localStorage.setItem("sidebar-collapsed", String(collapsed));
-      }
-    } catch {
-      // noop
-    }
-  }, [collapsed]);
+  const [collapsed, setCollapsed] = useSidebarCollapsed();
 
   return (
     <div className="min-h-screen bg-[color:var(--color-bg-app)] text-[color:var(--color-text-primary)]">

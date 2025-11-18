@@ -505,6 +505,27 @@ export interface EmailMetadata {
   taskStatus: string | null;
   emailId: string;
 }
+
+### Modelo Tag
+
+El modelo `Tag` representa el catálogo global de etiquetas del sistema para el manejo centralizado de etiquetas propuestas por la IA:
+
+```prisma
+model Tag {
+  id          String   @id @default(cuid())
+  descripcion String   @unique
+  createdAt   DateTime @default(now())
+
+  @@index([descripcion])
+}
+```
+
+- `descripcion`: Almacena la etiqueta normalizada (lowercase, sin tildes, sin espacios).
+- Existe un índice único sobre `descripcion` para evitar duplicados lógicos.
+- Este modelo se integra con el procesamiento IA para:
+  - Proveer catálogo existente como contexto a la IA.
+  - Registrar nuevas etiquetas propuestas por la IA de forma normalizada.
+  - Evitar la proliferación de variantes lógicas de la misma etiqueta.
 ```
 
 ---

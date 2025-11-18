@@ -216,7 +216,10 @@ async function generateWithRetry(model: string, prompt: string) {
  * - Si hay error de modelo/llamada, intenta fallback
  * - Valida respuesta con Zod y retorna estructura tipada
  */
-export async function processEmailsBatch(emails: EmailInput[]): Promise<ProcessBatchResult> {
+export async function processEmailsBatch(
+  emails: EmailInput[],
+  existingTags: string[] = []
+): Promise<ProcessBatchResult> {
   if (emails.length === 0) {
     return { analyses: [], modelUsed: MODEL_PRIMARY, usage: undefined, rawText: "[]" };
   }
@@ -224,7 +227,7 @@ export async function processEmailsBatch(emails: EmailInput[]): Promise<ProcessB
     throw new Error(`Se permite máximo ${MAX_BATCH} emails por batch`);
   }
 
-  const prompt = buildEmailProcessingPrompt(emails);
+  const prompt = buildEmailProcessingPrompt(emails, existingTags);
 
   // Intento primario
   try {

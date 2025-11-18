@@ -33,6 +33,12 @@ export interface EmailWithMetadata extends PrismaEmail {
   metadata: EmailMetadata | null;
 }
 
+export interface Tag {
+  id: string;
+  descripcion: string;
+  createdAt: Date;
+}
+
 // Tipos para filtros
 export type EmailFilterEstado = "todos" | "procesado" | "sin-procesar" | "aprobado";
 export type EmailFilterCategoria = "todas" | "cliente" | "lead" | "interno" | "spam";
