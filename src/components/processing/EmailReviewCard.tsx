@@ -250,7 +250,7 @@ export default function EmailReviewCard({ email }: { email: ReviewEmailItem }) {
               disabled={disabled}
               aria-label="Rechazar resultados de IA"
             >
-              Rechazar
+              Descartar
             </Button>
           </div>
         </div>

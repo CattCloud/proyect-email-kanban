@@ -18,7 +18,8 @@ model Email {
   processedAt DateTime?     // Null = no procesado, fecha = procesado en esa fecha
   approvedAt DateTime?      // Null = no aprobado aún, fecha = aprobado en esa fecha
   metadata   EmailMetadata?
-
+  rejectionReason String?      // Motivo del último rechazo (checkbox o texto libre)
+  previousAIResult Json?       // Snapshot JSON del análisis IA descartado
   @@index([from])
   @@index([subject])
   @@index([processedAt])

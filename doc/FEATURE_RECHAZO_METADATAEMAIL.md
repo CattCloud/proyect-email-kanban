@@ -30,6 +30,9 @@ previousAIResult?: JSON | null       // Snapshot completo del análisis descarta
 6. Prompt incluye NUEVA SECCIÓN con ambos campos como contexto
 ```
 
+## IMPORTANTE
+El nuevo PROMPT esta indicado en el documento [NUEVOPROMPT.md](/doc/NUEVOPROMPT.md)
+El contenido de este documento sobreescribira el prompto indicado en email-processing.ts
 ---
 
 ## 🎨 Categorías de Rechazo (Valores de `rejectionReason`)

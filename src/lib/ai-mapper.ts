@@ -21,6 +21,9 @@ export function mapEmailToAIInput(email: Email): EmailInput {
     received_at: email.receivedAt.toISOString(),
     subject: email.subject,
     body: email.body,
+    // Feedback de rechazo previo (si existe)
+    rejectionReason: email.rejectionReason ?? null,
+    previousAIResult: email.previousAIResult ?? null,
   };
 }
 
@@ -43,7 +46,9 @@ function normalizeStringArray(values: string[] | undefined | null, max: number):
 /**
  * Determina hasTask, taskDescription y taskStatus a partir de las tasks IA (compatibilidad)
  */
-function deriveLegacyTaskFields(analysis: EmailAnalysis): Pick<EmailMetadata, "hasTask" | "taskDescription" | "taskStatus"> {
+function deriveLegacyTaskFields(
+  analysis: EmailAnalysis
+): Pick<EmailMetadata, "hasTask" | "taskDescription" | "taskStatus"> {
   const hasTasks = Array.isArray(analysis.tasks) && analysis.tasks.length > 0;
   return {
     hasTask: hasTasks,
@@ -61,14 +66,16 @@ function buildTasksNestedWrites(analysis: EmailAnalysis): {
   deleteMany?: Prisma.TaskScalarWhereInput[] | Prisma.TaskWhereInput | Record<string, never>;
   create: Prisma.TaskCreateWithoutEmailMetadataInput[];
 } {
-  const tasks = (analysis.tasks ?? []).map((t): Prisma.TaskCreateWithoutEmailMetadataInput => ({
-    description: t.description,
-    dueDate: t.due_date ? new Date(t.due_date) : null,
-    tags: normalizeStringArray(t.tags, 3),
-    participants: normalizeStringArray(t.participants, 20),
-    // estado por defecto
-    status: "todo",
-  }));
+  const tasks = (analysis.tasks ?? []).map(
+    (t): Prisma.TaskCreateWithoutEmailMetadataInput => ({
+      description: t.description,
+      dueDate: t.due_date ? new Date(t.due_date) : null,
+      tags: normalizeStringArray(t.tags, 3),
+      participants: normalizeStringArray(t.participants, 20),
+      // estado por defecto
+      status: "todo",
+    })
+  );
 
   return {
     deleteMany: {}, // elimina todas las tasks actuales del EmailMetadata en update

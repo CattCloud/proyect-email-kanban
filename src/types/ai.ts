@@ -30,7 +30,11 @@ const EmailStringSchema = z.string().email("Formato de email inválido");
 
 /**
  * Entrada mínima requerida para construir el prompt de IA
- * Equivale a la estructura de ingesta definida en PromptPropuesto.md
+ * Equivale a la estructura de ingesta definida en PromptPropuesto/NUEVOPROMPT.
+ *
+ * Campos extendidos para soporte de feedback de rechazo previo:
+ * - rejectionReason: motivo textual (uno o varios motivos concatenados)
+ * - previousAIResult: snapshot JSON del análisis descartado
  */
 export interface EmailInput {
   id: string;
@@ -38,6 +42,16 @@ export interface EmailInput {
   received_at: string; // ISO 8601
   subject: string;
   body: string;
+  /**
+   * Motivo del rechazo previo (puede ser combinación de motivos predefinidos + texto libre).
+   * Ejemplo: "Categoría incorrecta | Tareas mal extraídas | El contacto es interno, no cliente".
+   */
+  rejectionReason?: string | null;
+  /**
+   * Snapshot completo del resultado IA descartado.
+   * Debe ser un JSON serializable (se enviará al prompt con JSON.stringify).
+   */
+  previousAIResult?: unknown | null;
 }
 
 /**

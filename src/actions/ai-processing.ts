@@ -11,6 +11,7 @@ import {
 } from "@/lib/ai-mapper";
 import { normalizeTagLabel } from "@/lib/tag-utils";
 import type { EmailAnalysis } from "@/types/ai";
+import { Prisma } from "@prisma/client";
 
 // Wrapper seguro para revalidación (evita fallos en entorno de tests/CLI)
 function revalidateSafe(path: string): void {
@@ -71,7 +72,10 @@ export interface GenericActionResult<T = unknown> {
  *  - createdAt desc
  * Paginado (page, pageSize)
  */
-export async function getUnprocessedEmails(page = 1, pageSize = 10): Promise<PagedEmailsResult> {
+export async function getUnprocessedEmails(
+  page = 1,
+  pageSize = 10
+): Promise<PagedEmailsResult> {
   try {
     const { page: p, pageSize: ps } = PaginationSchema.parse({ page, pageSize });
 
@@ -103,7 +107,9 @@ export async function getUnprocessedEmails(page = 1, pageSize = 10): Promise<Pag
  *  - Upsert de EmailMetadata + Tasks + Contact
  *  - Manejo de errores granular por email
  */
-export async function processEmailsWithAI(emailIds: string[]): Promise<ProcessEmailsSummary> {
+export async function processEmailsWithAI(
+  emailIds: string[]
+): Promise<ProcessEmailsSummary> {
   const summary: ProcessEmailsSummary = {
     success: false,
     processed: 0,
@@ -169,9 +175,13 @@ export async function processEmailsWithAI(emailIds: string[]): Promise<ProcessEm
           where: { descripcion: { in: normalizedList } },
           select: { descripcion: true },
         });
-        const existingNormalizedSet = new Set(existingTagRows.map((t) => t.descripcion));
+        const existingNormalizedSet = new Set(
+          existingTagRows.map((t) => t.descripcion)
+        );
 
-        const newTags = normalizedList.filter((t) => !existingNormalizedSet.has(t));
+        const newTags = normalizedList.filter(
+          (t) => !existingNormalizedSet.has(t)
+        );
 
         if (newTags.length > 0) {
           await prisma.tag.createMany({
@@ -193,7 +203,10 @@ export async function processEmailsWithAI(emailIds: string[]): Promise<ProcessEm
       const emailId = analysis.email_id;
       const email = emailById.get(emailId);
       if (!email) {
-        summary.errors.push({ emailId, error: "Análisis no coincide con un email existente" });
+        summary.errors.push({
+          emailId,
+          error: "Análisis no coincide con un email existente",
+        });
         continue;
       }
 
@@ -236,18 +249,23 @@ export async function processEmailsWithAI(emailIds: string[]): Promise<ProcessEm
     return summary;
   } catch (error) {
     console.error("processEmailsWithAI error:", error);
-    summary.errors.push({ emailId: "-", error: "Error general de procesamiento" });
+    summary.errors.push({
+      emailId: "-",
+      error: "Error general de procesamiento",
+    });
     return summary;
   }
 }
 
 /**
  * Obtiene resultados IA pendientes de revisión:
- *  - Emails con processedAt === null
- *  *  - Incluye EmailMetadata + Tasks (recientemente generados)
- *  *  - Filtra por IDs específicos
- *  */
-export async function getPendingAIResults(emailIds: string[]): Promise<GenericActionResult> {
+ *  - Emails con processedAt !== null y approvedAt IS NULL
+ *  - Incluye EmailMetadata + Tasks (recientemente generados)
+ *  - Filtra por IDs específicos
+ */
+export async function getPendingAIResults(
+  emailIds: string[]
+): Promise<GenericActionResult> {
   try {
     const ids = EmailIdsSchema.parse(emailIds);
 
@@ -275,23 +293,64 @@ export async function getPendingAIResults(emailIds: string[]): Promise<GenericAc
 
 /**
  * Confirma o rechaza resultados IA de un email.
- *  - confirmed = true: marca approvedAt = now (email ya debe estar procesado por IA)
- *  - confirmed = false: elimina EmailMetadata (+ cascade elimina Tasks) y revierte processedAt/approvedAt a null
+ *
+ * - confirmed = true:
+ *    - Marca approvedAt = now (email ya debe estar procesado por IA)
+ *    - Limpia rejectionReason y previousAIResult (se establece JsonNull en la columna JSON)
+ * - confirmed = false:
+ *    - Construye un snapshot JSON del resultado IA actual (EmailMetadata + Tasks)
+ *    - Guarda rejectionReason (si se proporciona)
+ *    - Guarda previousAIResult con ese snapshot JSON
+ *    - Elimina EmailMetadata (+ cascade elimina Tasks)
+ *    - Revierte processedAt/approvedAt a null
+ *
+ * El parámetro rejectionReason se usará desde la UI en HITO 3 (modal de rechazo).
  */
 export async function confirmAIResults(
   emailId: string,
-  confirmed: boolean
+  confirmed: boolean,
+  rejectionReason?: string | null
 ): Promise<GenericActionResult> {
   try {
     const id = SingleEmailIdSchema.parse(emailId);
 
-    // Verificar existencia
+    // Verificar existencia + cargar metadata y tasks para snapshot
     const existing = await prisma.email.findUnique({
       where: { id },
-      include: { metadata: true },
+      include: { metadata: { include: { tasks: true } } },
     });
 
     if (!existing) return { success: false, error: "Email no encontrado" };
+
+    const normalizedReason = rejectionReason?.trim() || null;
+
+    // Construir snapshot JSON solo en caso de rechazo y si existe metadata
+    let previousAIResultSnapshot:
+      | Prisma.InputJsonValue
+      | Prisma.NullableJsonNullValueInput;
+
+    if (!confirmed && existing.metadata) {
+      previousAIResultSnapshot = {
+        category: existing.metadata.category,
+        priority: existing.metadata.priority,
+        summary: existing.metadata.summary,
+        contactName: existing.metadata.contactName,
+        hasTask: existing.metadata.hasTask,
+        taskStatus: existing.metadata.taskStatus,
+        tasks: (existing.metadata.tasks ?? []).map((t) => ({
+          id: t.id,
+          description: t.description,
+          // Convertir Date a ISO string para que sea JSON válido
+          dueDate: t.dueDate ? t.dueDate.toISOString() : null,
+          tags: t.tags,
+          participants: t.participants,
+          status: t.status,
+        })),
+      } satisfies Prisma.InputJsonValue;
+    } else {
+      // JsonNull para representar ausencia explícita de snapshot
+      previousAIResultSnapshot = Prisma.JsonNull;
+    }
 
     if (confirmed) {
       const updated = await prisma.email.update({
@@ -299,6 +358,8 @@ export async function confirmAIResults(
         data: {
           // processedAt ya se establece al finalizar processEmailsWithAI
           approvedAt: new Date(),
+          rejectionReason: null,
+          previousAIResult: Prisma.JsonNull,
         },
         include: { metadata: { include: { tasks: true } } },
       });
@@ -310,7 +371,7 @@ export async function confirmAIResults(
         message: "Resultados IA confirmados y marcados como aprobados",
       };
     } else {
-      // Rechazar: eliminar metadata (tasks en cascade) y revertir a estado "No procesado"
+      // Rechazar: guardar snapshot + motivo y revertir a estado "No procesado"
       await prisma.$transaction(async (tx) => {
         await tx.emailMetadata.deleteMany({ where: { emailId: id } });
         await tx.email.update({
@@ -318,12 +379,17 @@ export async function confirmAIResults(
           data: {
             processedAt: null,
             approvedAt: null,
+            rejectionReason: normalizedReason,
+            previousAIResult: previousAIResultSnapshot,
           },
         });
       });
       revalidateSafe("/emails");
       revalidateSafe("/kanban");
-      return { success: true, message: "Resultados IA rechazados y limpiados" };
+      return {
+        success: true,
+        message: "Resultados IA rechazados, guardando snapshot previo",
+      };
     }
   } catch (error) {
     console.error("confirmAIResults error:", error);
@@ -334,7 +400,9 @@ export async function confirmAIResults(
 /**
  * Marca un conjunto de emails como procesados con processedAt = now
  */
-export async function updateProcessedAt(emailIds: string[]): Promise<GenericActionResult> {
+export async function updateProcessedAt(
+  emailIds: string[]
+): Promise<GenericActionResult> {
   try {
     const ids = EmailIdsSchema.parse(emailIds);
     const result = await prisma.email.updateMany({
@@ -343,7 +411,11 @@ export async function updateProcessedAt(emailIds: string[]): Promise<GenericActi
     });
     revalidateSafe("/emails");
     revalidateSafe("/kanban");
-    return { success: true, data: result, message: "Emails marcados como procesados" };
+    return {
+      success: true,
+      data: result,
+      message: "Emails marcados como procesados",
+    };
   } catch (error) {
     console.error("updateProcessedAt error:", error);
     return { success: false, error: "Error al actualizar processedAt" };
@@ -351,7 +423,7 @@ export async function updateProcessedAt(emailIds: string[]): Promise<GenericActi
 }
 
 /**
- * HITO 4: Obtener TODOS los resultados IA pendientes de revisión (processedAt IS NULL)
+ * HITO 4: Obtener TODOS los resultados IA pendientes de revisión (processedAt IS NOT NULL y approvedAt IS NULL)
  * Incluye EmailMetadata + Tasks para permitir edición/confirmación
  */
 export async function getPendingAllAIResults(): Promise<GenericActionResult> {
@@ -380,18 +452,36 @@ export async function getPendingAllAIResults(): Promise<GenericActionResult> {
 
 /**
  * HITO 4: Confirmar resultados IA (wrapper)
- * - Marca processedAt = now (publica resultados)
+ * - Marca approvedAt = now (publica resultados)
  * - Revalida rutas
  */
-export async function confirmProcessingResults(emailId: string): Promise<GenericActionResult> {
+export async function confirmProcessingResults(
+  emailId: string
+): Promise<GenericActionResult> {
   return confirmAIResults(emailId, true);
 }
 
 /**
- * HITO 4: Rechazar resultados IA (wrapper)
- * - Elimina EmailMetadata (+ cascade Tasks), mantiene processedAt = null
+ * HITO 4/HITO 3: Rechazar resultados IA (wrapper con motivo)
+ * - Rechaza el resultado IA, guarda snapshot + motivo de rechazo
  * - Revalida rutas
+ *
+ * Este wrapper se usará desde la UI con el modal de motivos.
  */
-export async function rejectProcessingResults(emailId: string): Promise<GenericActionResult> {
+export async function rejectProcessingResultsWithReason(
+  emailId: string,
+  rejectionReason: string
+): Promise<GenericActionResult> {
+  return confirmAIResults(emailId, false, rejectionReason);
+}
+
+/**
+ * Wrapper legacy sin motivo (compatibilidad con código existente)
+ * - Rechaza el resultado IA pero no guarda un motivo explícito
+ *   (rejectionReason queda en null, solo se guarda snapshot si aplica)
+ */
+export async function rejectProcessingResults(
+  emailId: string
+): Promise<GenericActionResult> {
   return confirmAIResults(emailId, false);
 }

@@ -4,7 +4,7 @@
  * - Interfaces: PascalCase + sufijo descriptivo
  * - Exportar desde archivos dedicados en src/types/
  */
-
+ 
 export interface EmailMetadata {
   id: string;
   category: string | null;
@@ -26,6 +26,8 @@ export interface PrismaEmail {
   createdAt: Date; // Fecha de importación del email
   processedAt: Date | null; // Null = no procesado, fecha = procesado
   approvedAt: Date | null; // Null = no aprobado, fecha = aprobado
+  rejectionReason: string | null; // Motivo del último rechazo de IA
+  previousAIResult: unknown | null; // Snapshot del análisis IA descartado
   metadata?: EmailMetadata | null;
 }
 
@@ -72,7 +74,7 @@ export interface DashboardMetrics {
   unprocessedEmails: number;
   pendingTasks: number;
   completedTasks: number;
-    mostFrequentSender?: {  
+  mostFrequentSender?: {  
     email: string;
     count: number;
   } | null;

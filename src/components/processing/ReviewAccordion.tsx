@@ -6,12 +6,13 @@ import { useRouter } from "next/navigation";
 import Button from "@/components/ui/button";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import SearchBar from "@/components/shared/SearchBar";
-import { EmailFilterCategoria, EmailFilterPriority, SortDirection }  from "@/types";
+import { EmailFilterCategoria, EmailFilterPriority, SortDirection } from "@/types";
 import {
   confirmProcessingResults,
-  rejectProcessingResults,
+  rejectProcessingResultsWithReason,
   type GenericActionResult,
 } from "@/actions/ai-processing";
+import { RejectReasonModal } from "@/components/processing/RejectReasonModal";
 
 export interface ReviewTask {
   id: string;
@@ -48,8 +49,18 @@ function formatReadableDate(input: string | Date): string {
   if (Number.isNaN(d.getTime())) return "Fecha inválida";
 
   const months = [
-    "enero", "febrero", "marzo", "abril", "mayo", "junio",
-    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "octubre",
+    "noviembre",
+    "diciembre",
   ];
 
   const day = d.getUTCDate();
@@ -98,7 +109,11 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
   const [openId, setOpenId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [busyById, setBusyById] = useState<Record<string, "accept" | "reject" | null>>({});
-  
+
+  // Estado para modal de rechazo
+  const [rejectingEmail, setRejectingEmail] = useState<ReviewEmailItem | null>(null);
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+
   // Estados para filtros
   const [query, setQuery] = useState("");
   const [sortDir, setSortDir] = useState<SortDirection>("desc");
@@ -112,36 +127,37 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
     // Aplicar filtros
     // Filtro por categoría
     if (filterCategoria !== "todas") {
-      data = data.filter(e => e.metadata?.category === filterCategoria);
+      data = data.filter((e) => e.metadata?.category === filterCategoria);
     }
     // Filtro por prioridad
     if (filterPrioridad !== "todas") {
-      data = data.filter(e => e.metadata?.priority === filterPrioridad);
+      data = data.filter((e) => e.metadata?.priority === filterPrioridad);
     }
     // Búsqueda por remitente o asunto
     if (query.trim() !== "") {
       const q = query.toLowerCase();
-      data = data.filter(e =>
-        e.from.toLowerCase().includes(q) ||
-        e.subject.toLowerCase().includes(q)
+      data = data.filter(
+        (e) =>
+          e.from.toLowerCase().includes(q) ||
+          e.subject.toLowerCase().includes(q)
       );
     }
-    
+
     // Ordenamiento doble: recibido primero, luego creado
     data.sort((a, b) => {
       const ra = new Date(a.receivedAt).getTime();
       const rb = new Date(b.receivedAt).getTime();
-      
+
       // Ordenamiento primario: receivedAt
       const receivedDiff = sortDir === "asc" ? ra - rb : rb - ra;
       if (receivedDiff !== 0) return receivedDiff;
-      
+
       // Ordenamiento secundario: createdAt (siempre descendente para mantener orden consistente)
       const ca = new Date(a.createdAt).getTime();
       const cb = new Date(b.createdAt).getTime();
       return cb - ca;
     });
-    
+
     return data;
   }, [items, query, sortDir, filterCategoria, filterPrioridad]);
 
@@ -150,7 +166,7 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
   }
 
   function toggleSortByDate() {
-    setSortDir(d => (d === "asc" ? "desc" : "asc") as SortDirection);
+    setSortDir((d) => (d === "asc" ? "desc" : "asc") as SortDirection);
   }
 
   function setBusy(id: string, v: "accept" | "reject" | null) {
@@ -177,15 +193,27 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
     }
   }
 
-  async function onReject(id: string) {
+  function openReject(email: ReviewEmailItem) {
+    setRejectingEmail(email);
+    setRejectModalOpen(true);
+  }
+
+  async function handleConfirmReject(reason: string) {
+    if (!rejectingEmail) return;
+    const id = rejectingEmail.id;
     setBusy(id, "reject");
     try {
-      const res = (await rejectProcessingResults(id)) as GenericActionResult;
+      const res = (await rejectProcessingResultsWithReason(
+        id,
+        reason
+      )) as GenericActionResult;
       if (!res.success) {
         alert(res.error ?? "Error al rechazar resultados IA");
         return;
       }
       startTransition(() => {
+        setRejectModalOpen(false);
+        setRejectingEmail(null);
         router.refresh();
       });
     } catch (e) {
@@ -202,6 +230,8 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
     setOpenId(null);
   }, [items.length]);
 
+  const isGlobalPending = pending;
+
   return (
     <div className="space-y-4">
       {/* Barra de herramientas: búsqueda + filtros */}
@@ -215,7 +245,9 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
 
         <div className="flex items-center gap-2">
           {/* Filtro categoría */}
-          <label className="text-sm text-[color:var(--color-text-secondary)]">Categoría</label>
+          <label className="text-sm text-[color:var(--color-text-secondary)]">
+            Categoría
+          </label>
           <select
             value={filterCategoria}
             onChange={(e) => {
@@ -232,7 +264,9 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
           </select>
 
           {/* Filtro prioridad */}
-          <label className="text-sm text-[color:var(--color-text-secondary)] ml-2">Prioridad</label>
+          <label className="text-sm text-[color:var(--color-text-secondary)] ml-2">
+            Prioridad
+          </label>
           <select
             value={filterPrioridad}
             onChange={(e) => {
@@ -254,7 +288,13 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
             onClick={toggleSortByDate}
             className="ml-2"
             aria-label="Cambiar orden de fecha"
-            leftIcon={sortDir === "asc" ? <ChevronUp className="w-4 h-4" aria-hidden /> : <ChevronDown className="w-4 h-4" aria-hidden />}
+            leftIcon={
+              sortDir === "asc" ? (
+                <ChevronUp className="w-4 h-4" aria-hidden />
+              ) : (
+                <ChevronDown className="w-4 h-4" aria-hidden />
+              )
+            }
           >
             Fecha
           </Button>
@@ -276,7 +316,7 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
             const md = email.metadata;
             const tasks = md?.tasks ?? [];
             const isOpen = openId === email.id;
-            const busy = pending || busyById[email.id] != null;
+            const busyForEmail = isGlobalPending || busyById[email.id] != null;
             const busyAccept = busyById[email.id] === "accept";
             const busyReject = busyById[email.id] === "reject";
 
@@ -291,7 +331,7 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
                 <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[color:var(--color-border-light)]">
                   <div className="min-w-0 space-y-1">
                     <div className="text-xs text-[color:var(--color-primary-600)] font-medium">
-                      Recibido:  {formatReadableDate(email.receivedAt)}
+                      Recibido: {formatReadableDate(email.receivedAt)}
                     </div>
                     <h3
                       id={`rev-${email.id}-title`}
@@ -307,7 +347,11 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <Link href={`/emails/${email.id}`} className="hide-mobile">
-                      <Button variant="link" size="sm" aria-label="Ver detalle del email">
+                      <Button
+                        variant="link"
+                        size="sm"
+                        aria-label="Ver detalle del email"
+                      >
                         Ver email
                       </Button>
                     </Link>
@@ -320,7 +364,11 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
                       onClick={() => toggle(email.id)}
                       className="p-2"
                     >
-                      {isOpen ? <ChevronUp className="w-5 h-5" aria-hidden /> : <ChevronDown className="w-5 h-5" aria-hidden />}
+                      {isOpen ? (
+                        <ChevronUp className="w-5 h-5" aria-hidden />
+                      ) : (
+                        <ChevronDown className="w-5 h-5" aria-hidden />
+                      )}
                     </Button>
                   </div>
                 </div>
@@ -333,7 +381,9 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
                   <div className="p-4 bg-[color:var(--color-bg-card)] transition-all">
                     {/* Cuerpo del email (resumen) */}
                     <div className="mb-3">
-                      <div className="text-[color:var(--color-primary-600)] font-medium text-sm mb-1">Contenido</div>
+                      <div className="text-[color:var(--color-primary-600)] font-medium text-sm mb-1">
+                        Contenido
+                      </div>
                       <div className="border border-[color:var(--color-border-light)] rounded-md p-3 bg-[color:var(--color-bg-card)] text-sm text-[color:var(--color-text-primary)] whitespace-pre-wrap">
                         {truncateText(email.body, 900)}
                       </div>
@@ -341,69 +391,94 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
 
                     {/* Análisis IA (metadata) */}
                     <div className="mb-3">
-                      <div className="text-[color:var(--color-primary-600)] font-medium text-sm mb-2">Análisis IA</div>
+                      <div className="text-[color:var(--color-primary-600)] font-medium text-sm mb-2">
+                        Análisis IA
+                      </div>
                       <div className="border border-[color:var(--color-border-light)] rounded-md p-4 bg-[color:var(--color-bg-alt)] mb-3">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
-                            <div className="text-xs font-semibold text-[color:var(--color-text-secondary)]">Categoría</div>
+                            <div className="text-xs font-semibold text-[color:var(--color-text-secondary)]">
+                              Categoría
+                            </div>
                             <div className="mt-1">
                               {md?.category ? (
                                 <span
-                                  className={`inline-flex items-center px-2 py-1 rounded text-xs ${md.category === "cliente"
-                                    ? "badge-categoria-cliente"
-                                    : md.category === "lead"
+                                  className={`inline-flex items-center px-2 py-1 rounded text-xs ${
+                                    md.category === "cliente"
+                                      ? "badge-categoria-cliente"
+                                      : md.category === "lead"
                                       ? "badge-categoria-lead"
                                       : md.category === "interno"
-                                        ? "badge-categoria-interno"
-                                        : "badge-categoria-spam"
-                                    }`}
+                                      ? "badge-categoria-interno"
+                                      : "badge-categoria-spam"
+                                  }`}
                                 >
                                   {md.category}
                                 </span>
                               ) : (
-                                <span className="text-[color:var(--color-text-muted)]">—</span>
+                                <span className="text-[color:var(--color-text-muted)]">
+                                  —
+                                </span>
                               )}
                             </div>
                           </div>
                           <div>
-                            <div className="text-xs font-semibold text-[color:var(--color-text-secondary)]">Prioridad</div>
+                            <div className="text-xs font-semibold text-[color:var(--color-text-secondary)]">
+                              Prioridad
+                            </div>
                             <div className="mt-1">
                               {md?.priority ? (
                                 <span
-                                  className={`inline-flex items-center px-2 py-1 rounded text-xs ${md.priority === "alta"
-                                    ? "badge-prioridad-alta"
-                                    : md.priority === "media"
+                                  className={`inline-flex items-center px-2 py-1 rounded text-xs ${
+                                    md.priority === "alta"
+                                      ? "badge-prioridad-alta"
+                                      : md.priority === "media"
                                       ? "badge-prioridad-media"
                                       : "badge-prioridad-baja"
-                                    }`}
+                                  }`}
                                 >
                                   {md.priority}
                                 </span>
                               ) : (
-                                <span className="text-[color:var(--color-text-muted)]">—</span>
+                                <span className="text-[color:var(--color-text-muted)]">
+                                  —
+                                </span>
                               )}
                             </div>
                           </div>
                           <div className="sm:col-span-2">
-                            <div className="text-xs font-semibold text-[color:var(--color-text-secondary)]">Resumen</div>
+                            <div className="text-xs font-semibold text-[color:var(--color-text-secondary)]">
+                              Resumen
+                            </div>
                             <div className="mt-1 text-[color:var(--color-text-primary)] text-md">
-                              {md?.summary ?? <span className="text-[color:var(--color-text-muted)]">—</span>}
+                              {md?.summary ?? (
+                                <span className="text-[color:var(--color-text-muted)]">
+                                  —
+                                </span>
+                              )}
                             </div>
                           </div>
                           <div className="sm:col-span-2">
-                            <div className="text-xs font-semibold text-[color:var(--color-text-secondary)]">Contacto</div>
+                            <div className="text-xs font-semibold text-[color:var(--color-text-secondary)]">
+                              Contacto
+                            </div>
                             <div className="mt-1 text-[color:var(--color-text-primary)] text-md">
-                              {md?.contactName ?? <span className="text-[color:var(--color-text-muted)]">—</span>}
+                              {md?.contactName ?? (
+                                <span className="text-[color:var(--color-text-muted)]">
+                                  —
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
                       </div>
-
                     </div>
 
                     {/* Tareas IA */}
                     <div className="mb-4">
-                      <div className="text-[color:var(--color-primary-600)] font-medium text-sm mb-2">Tareas ({tasks.length})</div>
+                      <div className="text-[color:var(--color-primary-600)] font-medium text-sm mb-2">
+                        Tareas ({tasks.length})
+                      </div>
                       {tasks.length === 0 ? (
                         <div className="text-sm text-[color:var(--color-text-secondary)]">
                           No se detectaron tareas.
@@ -411,54 +486,77 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
                       ) : (
                         <ul className="grid gap-3 sm:grid-cols-2">
                           {tasks.map((t) => (
-                            <li key={t.id} className="rounded-lg border bg-white p-4 flex flex-col gap-2 shadow-sm">
+                            <li
+                              key={t.id}
+                              className="rounded-lg border bg-white p-4 flex flex-col gap-2 shadow-sm"
+                            >
                               {/* Fila principal */}
                               <div className="flex justify-between items-center">
-                                <div className="font-medium text-[color:var(--color-primary-700)] text-sm">{t.description}</div>
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${t.status === "todo"
-                                  ? "bg-yellow-50 text-yellow-600"
-                                  : t.status === "doing"
-                                    ? "bg-blue-50 text-blue-700"
-                                    : "bg-green-50 text-green-700"
-                                  }`}>
-                                  {t.status === "todo" ? "Por hacer" : t.status === "doing" ? "En progreso" : "Completado"}
+                                <div className="font-medium text-[color:var(--color-primary-700)] text-sm">
+                                  {t.description}
+                                </div>
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                    t.status === "todo"
+                                      ? "bg-yellow-50 text-yellow-600"
+                                      : t.status === "doing"
+                                      ? "bg-blue-50 text-blue-700"
+                                      : "bg-green-50 text-green-700"
+                                  }`}
+                                >
+                                  {t.status === "todo"
+                                    ? "Por hacer"
+                                    : t.status === "doing"
+                                    ? "En progreso"
+                                    : "Completado"}
                                 </span>
                               </div>
 
                               {/* Fila secundaria: detalles distribuidos en columnas */}
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs mt-1">
-
                                 <div>
-                                  <span className="font-semibold">Tags:</span><br />
+                                  <span className="font-semibold">Tags:</span>
+                                  <br />
                                   <div className="flex flex-wrap gap-1 mt-1">
-                                    {t.tags && t.tags.map((tag) => (
-                                      <span
-                                        key={tag}
-                                        className="bg-gray-100 text-gray-600 rounded px-2 py-0.5 text-[11px]"
-                                      >#{tag}</span>
-                                    ))}
+                                    {t.tags &&
+                                      t.tags.map((tag) => (
+                                        <span
+                                          key={tag}
+                                          className="bg-gray-100 text-gray-600 rounded px-2 py-0.5 text-[11px]"
+                                        >
+                                          #{tag}
+                                        </span>
+                                      ))}
                                   </div>
                                 </div>
                                 <div>
-                                  <span className="font-semibold">Participantes:</span><br />
+                                  <span className="font-semibold">
+                                    Participantes:
+                                  </span>
+                                  <br />
                                   <div className="flex flex-wrap gap-1 mt-1">
-                                    {t.participants && t.participants.map((p) => (
-                                      <span
-                                        key={p}
-                                        className="bg-blue-50 text-blue-700 rounded px-2 py-0.5 text-[10px] font-medium"
-                                      >{p}</span>
-                                    ))}
+                                    {t.participants &&
+                                      t.participants.map((p) => (
+                                        <span
+                                          key={p}
+                                          className="bg-blue-50 text-blue-700 rounded px-2 py-0.5 text-[10px] font-medium"
+                                        >
+                                          {p}
+                                        </span>
+                                      ))}
                                   </div>
                                 </div>
                               </div>
 
                               <div className="flex text-xs mt-1">
-
-                                <span className="font-semibold">Vence: {t.dueDate ? formatReadableDate(t.dueDate) : "—"}</span>
-
+                                <span className="font-semibold">
+                                  Vence:{" "}
+                                  {t.dueDate
+                                    ? formatReadableDate(t.dueDate)
+                                    : "—"}
+                                </span>
                               </div>
                             </li>
-
                           ))}
                         </ul>
                       )}
@@ -471,7 +569,7 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
                         size="md"
                         onClick={() => onAccept(email.id)}
                         loading={busyAccept}
-                        disabled={busy}
+                        disabled={busyForEmail}
                         aria-label="Aceptar resultados de IA"
                       >
                         Aceptar
@@ -479,12 +577,12 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
                       <Button
                         variant="outline"
                         size="md"
-                        onClick={() => onReject(email.id)}
+                        onClick={() => openReject(email)}
                         loading={busyReject}
-                        disabled={busy}
+                        disabled={busyForEmail}
                         aria-label="Rechazar resultados de IA"
                       >
-                        Rechazar
+                        Descartar
                       </Button>
                     </div>
                   </div>
@@ -494,6 +592,17 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
           })
         )}
       </div>
+
+      {/* Modal de motivo de rechazo */}
+      <RejectReasonModal
+        open={rejectModalOpen}
+        emailSubject={rejectingEmail?.subject}
+        onClose={() => {
+          setRejectModalOpen(false);
+          setRejectingEmail(null);
+        }}
+        onConfirm={handleConfirmReject}
+      />
     </div>
   );
 }
