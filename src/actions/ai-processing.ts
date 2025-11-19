@@ -65,6 +65,25 @@ export interface GenericActionResult<T = unknown> {
   message?: string;
 }
 
+interface SnapshotTask {
+  id: string;
+  description: string;
+  dueDate: Date | null;
+  tags: string[];
+  participants: string[];
+  status: string;
+}
+
+interface SnapshotMetadata {
+  category: string | null;
+  priority: string | null;
+  summary: string | null;
+  contactName: string | null;
+  hasTask: boolean;
+  taskStatus: string | null;
+  tasks?: SnapshotTask[];
+}
+
 // ========================= Server Actions =========================
 
 /**
@@ -94,7 +113,11 @@ export async function getUnprocessedEmails(
       prisma.email.count({ where }),
       prisma.email.findMany({
         where,
-        include: { metadata: { include: { tasks: true } } },
+        include: {
+          metadata: {
+            include: { tasks: true },
+          },
+        } as unknown as Prisma.EmailInclude,
         orderBy: [{ receivedAt: "desc" }, { createdAt: "desc" }],
         skip: (p - 1) * ps,
         take: ps,
@@ -311,7 +334,7 @@ export async function getPendingAIResults(
         metadata: {
           include: { tasks: true },
         },
-      },
+      } as unknown as Prisma.EmailInclude,
       orderBy: [{ receivedAt: "desc" }, { createdAt: "desc" }],
     });
 
@@ -350,7 +373,11 @@ export async function confirmAIResults(
         id,
         userId,
       },
-      include: { metadata: { include: { tasks: true } } },
+      include: {
+        metadata: {
+          include: { tasks: true },
+        },
+      } as unknown as Prisma.EmailInclude,
     });
 
     if (!existing) return { success: false, error: "Email no encontrado" };
@@ -363,14 +390,16 @@ export async function confirmAIResults(
       | Prisma.NullableJsonNullValueInput;
 
     if (!confirmed && existing.metadata) {
+      const meta = existing.metadata as SnapshotMetadata;
+
       previousAIResultSnapshot = {
-        category: existing.metadata.category,
-        priority: existing.metadata.priority,
-        summary: existing.metadata.summary,
-        contactName: existing.metadata.contactName,
-        hasTask: existing.metadata.hasTask,
-        taskStatus: existing.metadata.taskStatus,
-        tasks: (existing.metadata.tasks ?? []).map((t) => ({
+        category: meta.category,
+        priority: meta.priority,
+        summary: meta.summary,
+        contactName: meta.contactName,
+        hasTask: meta.hasTask,
+        taskStatus: meta.taskStatus,
+        tasks: (meta.tasks ?? []).map((t: SnapshotTask) => ({
           id: t.id,
           description: t.description,
           // Convertir Date a ISO string para que sea JSON válido
@@ -394,7 +423,11 @@ export async function confirmAIResults(
           rejectionReason: null,
           previousAIResult: Prisma.JsonNull,
         },
-        include: { metadata: { include: { tasks: true } } },
+        include: {
+          metadata: {
+            include: { tasks: true },
+          },
+        } as unknown as Prisma.EmailInclude,
       });
       revalidateSafe("/emails");
       revalidateSafe("/kanban");
@@ -501,7 +534,7 @@ export async function getPendingAllAIResults(): Promise<GenericActionResult> {
         metadata: {
           include: { tasks: true },
         },
-      },
+      } as unknown as Prisma.EmailInclude,
       orderBy: [{ receivedAt: "desc" }, { createdAt: "desc" }],
     });
 
