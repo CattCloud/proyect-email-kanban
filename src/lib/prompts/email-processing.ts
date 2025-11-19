@@ -51,6 +51,7 @@ const TAGS_STRATEGY = `
 Estrategia de Etiquetado:
 PRIORIDAD 1: Usa ÚNICAMENTE etiquetas del catálogo existente cuando sean aplicables
 PRIORIDAD 2: Propón nuevas etiquetas SOLO cuando:
+  - No existan etiquetas en el sistema
   - Ninguna etiqueta existente describe adecuadamente la tarea
   - La nueva etiqueta será reutilizable en múltiples contextos
   - Es una categoría temática clara y específica
