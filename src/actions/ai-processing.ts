@@ -84,7 +84,7 @@ export async function getUnprocessedEmails(
     const userId = await requireCurrentUserId();
     const { page: p, pageSize: ps } = PaginationSchema.parse({ page, pageSize });
 
-    const where: Prisma.EmailWhereInput = {
+    const where = {
       userId,
       processedAt: null,
       isProcessable: true,
@@ -139,7 +139,7 @@ export async function processEmailsWithAI(
         id: { in: ids },
         userId,
         isProcessable: true,
-      } satisfies Prisma.EmailWhereInput,
+      },
     });
 
     if (emails.length === 0) {
@@ -306,7 +306,7 @@ export async function getPendingAIResults(
         processedAt: { not: null },
         approvedAt: null,
         isProcessable: true,
-      } satisfies Prisma.EmailWhereInput,
+      },
       include: {
         metadata: {
           include: { tasks: true },
@@ -349,7 +349,7 @@ export async function confirmAIResults(
       where: {
         id,
         userId,
-      } satisfies Prisma.EmailWhereInput,
+      },
       include: { metadata: { include: { tasks: true } } },
     });
 
@@ -444,7 +444,7 @@ export async function updateProcessedAt(
       where: {
         id: { in: ids },
         userId,
-      } satisfies Prisma.EmailWhereInput,
+      },
       data: { processedAt: new Date() },
     });
     revalidateSafe("/emails");
@@ -476,7 +476,7 @@ export async function getPendingAllAIResults(): Promise<GenericActionResult> {
   try {
     const userId = await requireCurrentUserId();
 
-    const where: Prisma.EmailWhereInput = {
+    const where = {
       userId,
       // Emails ya procesados por IA pero aún no aprobados
       processedAt: { not: null },
