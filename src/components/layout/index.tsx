@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -492,25 +492,38 @@ export function Header({
  */
 function useSidebarCollapsed() {
   const [collapsed, setCollapsed] = useState(() => {
-    // Solo leer de localStorage en el cliente
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("sidebar-collapsed");
-        return saved === "true";
-      } catch {
-        return false;
-      }
-    }
+    // Valor por defecto consistente para SSR y CSR
     return false;
   });
 
+  const isInitialized = useRef(false);
+
+  // Sincronizar con localStorage solo una vez después del montaje inicial
+  useEffect(() => {
+    if (!isInitialized.current) {
+      isInitialized.current = true;
+      
+      try {
+        const saved = localStorage.getItem("sidebar-collapsed");
+        if (saved !== null && saved !== "false") {
+          // Usar setTimeout para evitar sincronizar durante el renderizado del efecto
+          setTimeout(() => {
+            setCollapsed(saved === "true");
+          }, 0);
+        }
+      } catch {
+        // localStorage no disponible, mantener valor por defecto
+      }
+    }
+  }, []); // Solo ejecutar una vez
+
   // Persistir cambios en localStorage
   useEffect(() => {
-    if (typeof window !== "undefined") {
+    if (isInitialized.current) {
       try {
         localStorage.setItem("sidebar-collapsed", String(collapsed));
       } catch {
-        // noop
+        // localStorage no disponible, no persistir
       }
     }
   }, [collapsed]);
@@ -536,12 +549,16 @@ export function ProtectedShell({ children }: { children: React.ReactNode }) {
           onToggle={() => setCollapsed((v) => !v)}
         />
         {/* Contenedor principal */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 ">
           <Header onOpenMobile={() => setMobileOpen(true)} />
           <main className="container-padding py-6">{children}</main>
-          <footer className="h-[var(--footer-height)] flex items-center justify-center text-xs text-[color:var(--color-text-muted)]">
+          {/*
+                    <footer className="h-[var(--footer-height)] flex items-center justify-center text-xs text-[color:var(--color-text-muted)]">
             © 2025 Sistema de Gestión de Emails | Versión 1.0
           </footer>
+          
+          */}
+
         </div>
       </div>
 

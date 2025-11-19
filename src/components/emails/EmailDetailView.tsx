@@ -166,8 +166,8 @@ export default function EmailDetailView({ email, onBack }: EmailDetailViewProps)
         </div>
       </article>
 
-      {/* Barra de acciones simuladas */}
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Barra de acciones simuladas 
+            <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
           onClick={handleEditMetadata}
@@ -227,6 +227,8 @@ export default function EmailDetailView({ email, onBack }: EmailDetailViewProps)
           </Button>
         ) : null}
       </div>
+
+      */}
 
       {approvalError && (
         <div

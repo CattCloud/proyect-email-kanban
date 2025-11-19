@@ -15,8 +15,8 @@ import type { EmailInput, EmailAnalysis } from "@/types/ai";
  */
 
 // ========================= Configuración =========================
-//const MODEL_PRIMARY = process.env.OPENAI_MODEL_PRIMARY ?? "gpt-4-turbo";
-const MODEL_PRIMARY = process.env.OPENAI_MODEL_PRIMARY ?? "gpt-3.5-turbo";
+const MODEL_PRIMARY = process.env.OPENAI_MODEL_PRIMARY ?? "gpt-4-turbo";
+//const MODEL_PRIMARY = process.env.OPENAI_MODEL_PRIMARY ?? "gpt-3.5-turbo";
 const MODEL_FALLBACK = process.env.OPENAI_MODEL_FALLBACK ?? "gpt-3.5-turbo";
 
 const MAX_BATCH = 10;
