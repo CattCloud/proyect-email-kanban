@@ -79,7 +79,9 @@ function buildTasksNestedWrites(
       // estado por defecto
       status: "todo",
       // Asociación multiusuario: cada Task pertenece al mismo usuario que el Email
-      userId: email.userId,
+      user: {
+        connect: { id: email.userId },
+      },
     })
   );
 
