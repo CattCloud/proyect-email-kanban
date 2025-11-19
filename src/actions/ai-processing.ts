@@ -88,7 +88,7 @@ export async function getUnprocessedEmails(
       userId,
       processedAt: null,
       isProcessable: true,
-    };
+    } as Prisma.EmailWhereInput;
 
     const [total, data] = await Promise.all([
       prisma.email.count({ where }),
