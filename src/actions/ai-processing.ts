@@ -118,7 +118,7 @@ export async function getUnprocessedEmails(
             include: { tasks: true },
           },
         } as unknown as Prisma.EmailInclude,
-        orderBy: [{ receivedAt: "desc" }, { createdAt: "desc" }],
+        orderBy: [{ receivedAt: "desc" }],
         skip: (p - 1) * ps,
         take: ps,
       }),
@@ -335,7 +335,7 @@ export async function getPendingAIResults(
           include: { tasks: true },
         },
       } as unknown as Prisma.EmailInclude,
-      orderBy: [{ receivedAt: "desc" }, { createdAt: "desc" }],
+      orderBy: [{ receivedAt: "desc" }],
     });
 
     return { success: true, data };
@@ -535,7 +535,7 @@ export async function getPendingAllAIResults(): Promise<GenericActionResult> {
           include: { tasks: true },
         },
       } as unknown as Prisma.EmailInclude,
-      orderBy: [{ receivedAt: "desc" }, { createdAt: "desc" }],
+      orderBy: [{ receivedAt: "desc" }],
     });
 
     return { success: true, data };
