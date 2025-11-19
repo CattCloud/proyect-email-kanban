@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { navigationItems } from "@/lib/mock-data/navigation";
 import {
@@ -10,6 +11,7 @@ import {
   Columns as ColumnsIcon,
   Menu as MenuIcon,
   X as XIcon,
+  Brain as BrainIcon,
   ChevronLeft,
   ChevronRight,
   User as UserIcon,
@@ -40,7 +42,8 @@ type LucideKey =
   | "ChevronLeft"
   | "ChevronRight"
   | "User"
-  | "LogOut";
+  | "LogOut"
+  | "Brain";
 
 function Lucide({
   name,
@@ -68,6 +71,8 @@ function Lucide({
       return <UserIcon className={className} aria-hidden />;
     case "LogOut":
       return <LogOutIcon className={className} aria-hidden />;
+    case "Brain":
+      return <BrainIcon className={className} aria-hidden />;
     default:
       return null;
   }
@@ -97,7 +102,14 @@ export function Sidebar({
     >
       {/* Logo / Nombre */}
       <div className="flex items-center gap-2 p-4">
-        <div className="w-8 h-8 rounded-md gradient-primary" aria-hidden />
+        <Image
+          src="/logo.svg"
+          alt="Email Kanban Logo"
+          width={32}
+          height={32}
+          className="w-8 h-8"
+          priority
+        />
         {!collapsed && (
           <h2 className="text-sm font-semibold text-[color:var(--color-text-primary)]">
             Email Kanban
@@ -193,7 +205,13 @@ export function MobileSidebar({
       >
         <div className="flex items-center justify-between p-4 border-b border-[color:var(--color-border-light)]">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-md gradient-primary" aria-hidden />
+            <Image
+              src="/logo.svg"
+              alt="Email Kanban Logo"
+              width={32}
+              height={32}
+              className="w-8 h-8"
+            />
             <h2 className="text-sm font-semibold text-[color:var(--color-text-primary)]">
               Email Kanban
             </h2>

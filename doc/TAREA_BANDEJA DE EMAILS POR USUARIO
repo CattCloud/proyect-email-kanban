@@ -1,0 +1,29 @@
+## 1️⃣ Desde la autenticación hasta el proceso de traer los correos del buzón
+
+**Flujo recomendado para MVP :**
+
+### **A. Autenticación **
+- El usuario inicia sesión en la plataforma usando su cuenta Google (Gmail o Workspace), garantizando autenticación segura y sin contraseñas propias.
+- En su primer acceso se le solicita el permiso para que la plataforma pueda leer sus correos de Gmail. Este consentimiento es gestionado y aprobado 100% por Google.
+
+### **B. Importación inteligente de correos recientes**
+- Por defecto, el sistema **importa exclusivamente los correos recibidos en los últimos 7 días** desde la bandeja principal (Inbox) del usuario.
+- El usuario no necesita configurar nada: este criterio predeterminado asegura que sólo trae lo más relevante y reciente, evitando saturar tanto la plataforma como el usuario con información irrelevante.
+
+
+### **C. Sincronización inicial y mensajes claros**
+- Al conceder acceso, se muestra ventana de cargando con un mensaje indicando que:
+  > “Se están importando tus correos más recientes de los últimos 7 días para que puedas empezar a gestionar tus tareas de inmediato.”
+
+
+### **D. Actualizaciones automáticas**
+- Posteriormente, cada vez que el usuario inicia sesión, el sistema revisa e importa **sólo los correos nuevos** que hayan llegado desde la última vez, dentro de ese rango de 7 días.
+- Así, el usuario siempre trabajará con la información más fresca y relevante, sin importar duplicados ni sobresaturar la interfaz.
+
+### **E. Respeto por la privacidad**
+- Si un usuario revoca permisos o cambia la cuenta Google, la importación se detiene automáticamente, garantizando control y privacidad en todo momento.
+
+***
+
+
+

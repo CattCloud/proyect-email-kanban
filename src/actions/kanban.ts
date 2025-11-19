@@ -11,17 +11,19 @@ import type {
   KanbanContactsResult,
   TaskStatus,
 } from "@/types";
+import { requireCurrentUserId } from "@/lib/auth-session";
 
 /**
- * Hito Semana 4 - Kanban por contacto
+ * Hito Semana 4 + Asociación por usuario
  * Server Actions específicas para:
- * - Obtener tareas filtradas por contacto(s) y estado
- * - Obtener contactos para el selector del Kanban
- * - Actualizar el estado de una tarea (todo, doing, done)
+ * - Obtener tareas filtradas por contacto(s), estado y usuario actual
+ * - Obtener contactos para el selector del Kanban (solo del usuario actual)
+ * - Actualizar el estado de una tarea (todo, doing, done) del usuario actual
  *
  * Requisitos:
  * - Sin romper compatibilidad con el Kanban actual (basado en EmailMetadata.taskStatus)
  * - Preparado para múltiples tareas por email (modelo Task)
+ * - Aislar datos por userId (multiusuario básico)
  */
 
 // ========================= Schemas =========================
@@ -67,6 +69,7 @@ interface TaskWithEmailAndMetadata {
   tags: string[];
   participants: string[];
   createdAt: Date;
+  userId: string;
   emailMetadata: {
     id: string;
     emailId: string;
@@ -78,6 +81,7 @@ interface TaskWithEmailAndMetadata {
       from: string;
       processedAt: Date | null;
       approvedAt: Date | null;
+      userId: string;
     };
   };
 }
@@ -142,7 +146,7 @@ function mapTaskToKanbanTask(
     contactId: contact?.id ?? null,
     contactName: contact?.name ?? null,
     contactEmail: contact?.email ?? email.from,
-    // Enriquecimiento visual (Hito 3)
+    // Enriquecimiento visual
     category: task.emailMetadata.category,
     priority: task.emailMetadata.priority,
     approvedAt: email.approvedAt,
@@ -155,6 +159,7 @@ function mapTaskToKanbanTask(
  * Obtiene tareas para el Kanban por contacto, filtradas por:
  * - Uno o varios contactos (por Contact.id y/o email)
  * - Estado(s) de tarea (todo, doing, done)
+ * - userId del usuario autenticado
  *
  * Reglas:
  * - Solo considera tareas cuyos emails estén procesados por IA (processedAt != null)
@@ -164,6 +169,7 @@ export async function getKanbanTasks(
   rawInput?: GetKanbanTasksInput
 ): Promise<KanbanTasksResult> {
   try {
+    const userId = await requireCurrentUserId();
     const input = KanbanFilterSchema.parse(rawInput ?? {});
 
     // 1) Resolver filtro de contactos a lista de emails
@@ -187,16 +193,17 @@ export async function getKanbanTasks(
     // 2) Construir where para Task
     type TaskWhere = Prisma.TaskWhereInput;
 
-    const statusFilter =
+    const statusFilter: TaskWhere =
       input.statuses && input.statuses.length > 0
         ? { status: { in: input.statuses } }
         : {};
 
-    const emailFilterBase = {
+    const emailFilterBase: Prisma.EmailWhereInput = {
       processedAt: { not: null },
-    };
+      userId,
+    } as Prisma.EmailWhereInput;
 
-    const emailFilter =
+    const emailFilter: Prisma.EmailWhereInput =
       contactEmailsFilter && contactEmailsFilter.length > 0
         ? {
             ...emailFilterBase,
@@ -205,6 +212,7 @@ export async function getKanbanTasks(
         : emailFilterBase;
 
     const where: TaskWhere = {
+      userId,
       ...statusFilter,
       emailMetadata: {
         email: emailFilter,
@@ -271,18 +279,22 @@ export async function getKanbanTasks(
 }
 
 /**
- * Obtiene contactos relevantes para el selector del Kanban.
+ * Obtiene contactos relevantes para el selector del Kanban
+ * del usuario autenticado.
  *
  * Estrategia:
- * - Parte de los contactos existentes en la tabla Contact
+ * - Parte de las tareas del usuario actual en la tabla Task
  * - Solo devuelve contactos que tienen al menos una tarea asociada
  *   (via Email.from = Contact.email)
  * - Incluye contadores de tareas por estado
  */
 export async function getKanbanContacts(): Promise<KanbanContactsResult> {
   try {
-    // 1) Cargar todas las tareas con su email
+    const userId = await requireCurrentUserId();
+
+    // 1) Cargar todas las tareas del usuario con su email
     const tasks = (await prisma.task.findMany({
+      where: { userId },
       include: {
         emailMetadata: {
           include: {
@@ -383,11 +395,12 @@ export async function getKanbanContacts(): Promise<KanbanContactsResult> {
 }
 
 /**
- * Actualiza el estado de una tarea del Kanban (todo, doing, done).
+ * Actualiza el estado de una tarea del Kanban (todo, doing, done)
+ * del usuario autenticado.
  *
  * Reglas:
  * - Valida entrada con Zod
- * - Verifica existencia de la tarea
+ * - Verifica existencia de la tarea y que pertenece al usuario
  * - Actualiza Task.status
  * - Sincroniza EmailMetadata.taskStatus para compatibilidad con la UI actual
  * - Revalida rutas Kanban, Dashboard y Emails
@@ -396,6 +409,7 @@ export async function updateKanbanTaskStatus(
   rawInput: UpdateTaskStatusInput
 ): Promise<KanbanTaskOperationResult> {
   try {
+    const userId = await requireCurrentUserId();
     const input = UpdateTaskStatusSchema.parse(rawInput);
 
     // 1) Verificar que la tarea existe y cargar email relacionado
@@ -414,6 +428,14 @@ export async function updateKanbanTaskStatus(
       return {
         success: false,
         error: "Tarea no encontrada",
+      };
+    }
+
+    // Asegurar que la tarea pertenece al usuario actual
+    if (existing.userId !== userId || existing.emailMetadata.email.userId !== userId) {
+      return {
+        success: false,
+        error: "No tienes permiso para actualizar esta tarea",
       };
     }
 

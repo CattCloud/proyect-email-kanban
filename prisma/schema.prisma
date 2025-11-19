@@ -7,19 +7,37 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  image     String?
+  createdAt DateTime @default(now())
+
+  emails Email[]
+  tasks  Task[]
+  gmailAccount GmailAccount?
+}
+
 model Email {
-  id         String         @id @default(cuid())
-  idEmail    String         @unique // ID externo del email (del JSON)
-  from       String
-  subject    String
-  body       String
-  receivedAt DateTime       @default(now())
-  createdAt  DateTime       @default(now()) // Fecha de importación del email
-  processedAt DateTime?     // Null = no procesado, fecha = procesado en esa fecha
-  approvedAt DateTime?      // Null = no aprobado aún, fecha = aprobado en esa fecha
-  metadata   EmailMetadata?
-  rejectionReason String?      // Motivo del último rechazo (checkbox o texto libre)
-  previousAIResult Json?       // Snapshot JSON del análisis IA descartado
+  id           String         @id @default(cuid())
+  idEmail      String         @unique // ID externo del email (del JSON)
+  from         String
+  subject      String
+  body         String
+  receivedAt   DateTime       @default(now())
+  createdAt    DateTime       @default(now()) // Fecha de importación del email
+  processedAt  DateTime?      // Null = no procesado, fecha = procesado en esa fecha
+  approvedAt   DateTime?      // Null = no aprobado aún, fecha = aprobado en esa fecha
+  metadata     EmailMetadata?
+  rejectionReason  String?    // Motivo del último rechazo (checkbox o texto libre)
+  previousAIResult Json?      // Snapshot JSON del análisis IA descartado
+
+  // Asociación por usuario (multiusuario)
+  userId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  isProcessable Boolean @default(true)
   @@index([from])
   @@index([subject])
   @@index([processedAt])
@@ -28,6 +46,7 @@ model Email {
   @@index([receivedAt])
   @@index([createdAt])
   @@index([idEmail])
+  @@index([userId, receivedAt])
 }
 
 model EmailMetadata {
@@ -64,8 +83,13 @@ model Task {
   createdAt       DateTime       @default(now())
   status          String         @default("todo") // 'todo' | 'doing' | 'done'
 
+  // Asociación por usuario (multiusuario)
+  userId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([emailMetadataId])
   @@index([status])
+  @@index([userId, status])
 }
 
 model Contact {
@@ -81,4 +105,22 @@ model Tag {
   createdAt   DateTime @default(now())
 
   @@index([descripcion])
+}
+
+
+model GmailAccount {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  accessToken  String
+  refreshToken String
+  scope        String
+  tokenType    String
+  expiryDate   DateTime
+  lastSyncAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

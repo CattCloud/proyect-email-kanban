@@ -12,6 +12,7 @@ import {
 import { normalizeTagLabel } from "@/lib/tag-utils";
 import type { EmailAnalysis } from "@/types/ai";
 import { Prisma } from "@prisma/client";
+import { requireCurrentUserId } from "@/lib/auth-session";
 
 // Wrapper seguro para revalidación (evita fallos en entorno de tests/CLI)
 function revalidateSafe(path: string): void {
@@ -67,24 +68,32 @@ export interface GenericActionResult<T = unknown> {
 // ========================= Server Actions =========================
 
 /**
- * Devuelve emails no procesados (processedAt IS NULL) con orden:
+ * Devuelve emails no procesados (processedAt IS NULL) del usuario actual con orden:
  *  - receivedAt desc
  *  - createdAt desc
  * Paginado (page, pageSize)
+ *
+ * HITO 2 (Filtrado Correos No Procesables):
+ *  - Solo devuelve emails isProcessable = true.
  */
 export async function getUnprocessedEmails(
   page = 1,
   pageSize = 10
 ): Promise<PagedEmailsResult> {
   try {
+    const userId = await requireCurrentUserId();
     const { page: p, pageSize: ps } = PaginationSchema.parse({ page, pageSize });
 
+    const where: Prisma.EmailWhereInput = {
+      userId,
+      processedAt: null,
+      isProcessable: true,
+    };
+
     const [total, data] = await Promise.all([
-      prisma.email.count({
-        where: { processedAt: null },
-      }),
+      prisma.email.count({ where }),
       prisma.email.findMany({
-        where: { processedAt: null },
+        where,
         include: { metadata: { include: { tasks: true } } },
         orderBy: [{ receivedAt: "desc" }, { createdAt: "desc" }],
         skip: (p - 1) * ps,
@@ -100,12 +109,15 @@ export async function getUnprocessedEmails(
 }
 
 /**
- * Procesa emails con IA (máximo 10):
- *  - Obtiene emails por IDs
+ * Procesa emails con IA (máximo 10) del usuario actual:
+ *  - Obtiene emails por IDs y userId
  *  - Llama a OpenAI (batch)
  *  - Valida y mapea resultados
- *  - Upsert de EmailMetadata + Tasks + Contact
+ *  - Upsert de EmailMetadata + Task[] + Contact
  *  - Manejo de errores granular por email
+ *
+ * HITO 2 (Filtrado Correos No Procesables):
+ *  - Solo procesa emails isProcessable = true.
  */
 export async function processEmailsWithAI(
   emailIds: string[]
@@ -117,11 +129,17 @@ export async function processEmailsWithAI(
   };
 
   try {
+    const userId = await requireCurrentUserId();
     const ids = EmailIdsSchema.parse(emailIds);
 
-    // Cargar emails desde BD
+    // Cargar emails desde BD, asegurando que pertenecen al usuario actual
+    // y que son procesables por IA.
     const emails = await prisma.email.findMany({
-      where: { id: { in: ids } },
+      where: {
+        id: { in: ids },
+        userId,
+        isProcessable: true,
+      } satisfies Prisma.EmailWhereInput,
     });
 
     if (emails.length === 0) {
@@ -129,7 +147,12 @@ export async function processEmailsWithAI(
         ...summary,
         success: false,
         processed: 0,
-        errors: [{ emailId: "-", error: "No se encontraron emails" }],
+        errors: [
+          {
+            emailId: "-",
+            error: "No se encontraron emails procesables del usuario actual",
+          },
+        ],
       };
     }
 
@@ -195,17 +218,20 @@ export async function processEmailsWithAI(
       // Importante: no interrumpir el flujo principal de procesamiento
     }
 
-    // Index rápido por ID de email en BD
-    const emailById = new Map(emails.map((e) => [e.id, e]));
+    // Index rápido por ID de email en BD sin usar `any`
+    const emailById: Record<string, (typeof emails)[number]> = {};
+    for (const email of emails) {
+      emailById[email.id] = email;
+    }
 
     // Procesar cada análisis devuelto por IA de forma independiente (manejo granular)
     for (const analysis of aiResult.analyses as EmailAnalysis[]) {
       const emailId = analysis.email_id;
-      const email = emailById.get(emailId);
+      const email = emailById[emailId];
       if (!email) {
         summary.errors.push({
           emailId,
-          error: "Análisis no coincide con un email existente",
+          error: "Análisis no coincide con un email existente del usuario",
         });
         continue;
       }
@@ -244,7 +270,6 @@ export async function processEmailsWithAI(
     revalidateSafe("/emails");
     revalidateSafe("/kanban");
     revalidateSafe("/");
-
     summary.success = summary.errors.length === 0;
     return summary;
   } catch (error) {
@@ -258,24 +283,30 @@ export async function processEmailsWithAI(
 }
 
 /**
- * Obtiene resultados IA pendientes de revisión:
+ * Obtiene resultados IA pendientes de revisión del usuario actual:
  *  - Emails con processedAt !== null y approvedAt IS NULL
  *  - Incluye EmailMetadata + Tasks (recientemente generados)
  *  - Filtra por IDs específicos
+ *
+ * HITO 2 (Filtrado Correos No Procesables):
+ *  - Solo devuelve emails isProcessable = true.
  */
 export async function getPendingAIResults(
   emailIds: string[]
 ): Promise<GenericActionResult> {
   try {
+    const userId = await requireCurrentUserId();
     const ids = EmailIdsSchema.parse(emailIds);
 
     const data = await prisma.email.findMany({
       where: {
         id: { in: ids },
+        userId,
         // Emails ya procesados por IA pero aún no aprobados
         processedAt: { not: null },
         approvedAt: null,
-      },
+        isProcessable: true,
+      } satisfies Prisma.EmailWhereInput,
       include: {
         metadata: {
           include: { tasks: true },
@@ -292,7 +323,7 @@ export async function getPendingAIResults(
 }
 
 /**
- * Confirma o rechaza resultados IA de un email.
+ * Confirma o rechaza resultados IA de un email del usuario actual.
  *
  * - confirmed = true:
  *    - Marca approvedAt = now (email ya debe estar procesado por IA)
@@ -303,8 +334,6 @@ export async function getPendingAIResults(
  *    - Guarda previousAIResult con ese snapshot JSON
  *    - Elimina EmailMetadata (+ cascade elimina Tasks)
  *    - Revierte processedAt/approvedAt a null
- *
- * El parámetro rejectionReason se usará desde la UI en HITO 3 (modal de rechazo).
  */
 export async function confirmAIResults(
   emailId: string,
@@ -312,11 +341,15 @@ export async function confirmAIResults(
   rejectionReason?: string | null
 ): Promise<GenericActionResult> {
   try {
+    const userId = await requireCurrentUserId();
     const id = SingleEmailIdSchema.parse(emailId);
 
     // Verificar existencia + cargar metadata y tasks para snapshot
-    const existing = await prisma.email.findUnique({
-      where: { id },
+    const existing = await prisma.email.findFirst({
+      where: {
+        id,
+        userId,
+      } satisfies Prisma.EmailWhereInput,
       include: { metadata: { include: { tasks: true } } },
     });
 
@@ -399,14 +432,19 @@ export async function confirmAIResults(
 
 /**
  * Marca un conjunto de emails como procesados con processedAt = now
+ * (solo emails del usuario actual)
  */
 export async function updateProcessedAt(
   emailIds: string[]
 ): Promise<GenericActionResult> {
   try {
+    const userId = await requireCurrentUserId();
     const ids = EmailIdsSchema.parse(emailIds);
     const result = await prisma.email.updateMany({
-      where: { id: { in: ids } },
+      where: {
+        id: { in: ids },
+        userId,
+      } satisfies Prisma.EmailWhereInput,
       data: { processedAt: new Date() },
     });
     revalidateSafe("/emails");
@@ -423,19 +461,42 @@ export async function updateProcessedAt(
 }
 
 /**
- * HITO 4: Obtener TODOS los resultados IA pendientes de revisión (processedAt IS NOT NULL y approvedAt IS NULL)
+ * Obtener TODOS los resultados IA pendientes de revisión del usuario actual
+ * (processedAt IS NOT NULL y approvedAt IS NULL)
  * Incluye EmailMetadata + Tasks para permitir edición/confirmación
+ *
+ * HITO 2 (Filtrado Correos No Procesables):
+ *  - Solo devuelve emails isProcessable = true.
+ *
+ * Regla adicional (tarea solicitada):
+ *  - Si el email tiene tareas con estado "doing" o "done" en el Kanban,
+ *    deja de mostrarse en la página de Revisión IA, aunque approvedAt siga en null.
  */
 export async function getPendingAllAIResults(): Promise<GenericActionResult> {
   try {
-    const data = await prisma.email.findMany({
-      where: {
-        // Emails ya procesados por IA pero aún no aprobados
-        processedAt: { not: null },
-        approvedAt: null,
-        // Deben existir resultados IA a revisar (metadata creada)
-        metadata: { isNot: null },
+    const userId = await requireCurrentUserId();
+
+    const where: Prisma.EmailWhereInput = {
+      userId,
+      // Emails ya procesados por IA pero aún no aprobados
+      processedAt: { not: null },
+      approvedAt: null,
+      isProcessable: true,
+      // Deben existir resultados IA a revisar (metadata creada) y
+      // sus tareas no pueden estar en "doing" ni "done".
+      metadata: {
+        is: {
+          tasks: {
+            none: {
+              status: { in: ["doing", "done"] },
+            },
+          },
+        },
       },
+    };
+
+    const data = await prisma.email.findMany({
+      where,
       include: {
         metadata: {
           include: { tasks: true },
@@ -443,6 +504,7 @@ export async function getPendingAllAIResults(): Promise<GenericActionResult> {
       },
       orderBy: [{ receivedAt: "desc" }, { createdAt: "desc" }],
     });
+
     return { success: true, data };
   } catch (error) {
     console.error("getPendingAllAIResults error:", error);

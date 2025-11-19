@@ -1,4 +1,4 @@
-import type { Prisma, Email, EmailMetadata, Task as PrismaTask } from "@prisma/client";
+import type { Prisma, Email, EmailMetadata } from "@prisma/client";
 import type { EmailAnalysis, EmailInput } from "@/types/ai";
 
 /**
@@ -61,8 +61,12 @@ function deriveLegacyTaskFields(
 /**
  * Construye la estructura de creación/actualización de tareas relacionadas
  * - En update: se borra y re-crea para mantener consistencia con la última corrida de IA
+ * - Incluye userId para asociar cada Task al usuario propietario del Email
  */
-function buildTasksNestedWrites(analysis: EmailAnalysis): {
+function buildTasksNestedWrites(
+  email: Email,
+  analysis: EmailAnalysis
+): {
   deleteMany?: Prisma.TaskScalarWhereInput[] | Prisma.TaskWhereInput | Record<string, never>;
   create: Prisma.TaskCreateWithoutEmailMetadataInput[];
 } {
@@ -74,6 +78,8 @@ function buildTasksNestedWrites(analysis: EmailAnalysis): {
       participants: normalizeStringArray(t.participants, 20),
       // estado por defecto
       status: "todo",
+      // Asociación multiusuario: cada Task pertenece al mismo usuario que el Email
+      userId: email.userId,
     })
   );
 
@@ -94,7 +100,7 @@ export function buildEmailMetadataUpsertArgs(
   analysis: EmailAnalysis
 ): Parameters<Prisma.EmailMetadataDelegate["upsert"]>[0] {
   const legacy = deriveLegacyTaskFields(analysis);
-  const tasksNested = buildTasksNestedWrites(analysis);
+  const tasksNested = buildTasksNestedWrites(email, analysis);
 
   return {
     where: { emailId: email.id },

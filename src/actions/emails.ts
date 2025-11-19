@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
+import { requireCurrentUserId } from "@/lib/auth-session"
 
 const EmailSchema = z.object({
   from: z.string().email("Email inválido"),
@@ -110,11 +111,18 @@ function canApproveEmail(email: { processedAt: Date | null, approvedAt: Date | n
 // Server Actions
 
 /**
- * Obtener todos los emails con su metadata
+ * Obtener todos los emails procesables del usuario actual con su metadata
+ * (Filtrado Correos No Procesables - HITO 3: solo isProcessable = true)
  */
 export async function getEmails() {
   try {
+    const userId = await requireCurrentUserId()
+
     const emails = await prisma.email.findMany({
+      where: {
+        userId,
+        isProcessable: true
+      },
       include: {
         metadata: true
       },
@@ -134,12 +142,43 @@ export async function getEmails() {
 }
 
 /**
- * Obtener un email específico por ID con su metadata
+ * Obtener el conteo de emails NO procesables (isProcessable = false)
+ * del usuario actual. Usado para banner informativo en la bandeja.
+ */
+export async function getNonProcessableEmailsCountForCurrentUser() {
+  try {
+    const userId = await requireCurrentUserId()
+
+    const count = await prisma.email.count({
+      where: {
+        userId,
+        isProcessable: false
+      }
+    })
+
+    return {
+      success: true,
+      data: count
+    }
+  } catch (error) {
+    console.error("Error al obtener conteo de emails no procesables:", error)
+    return {
+      success: false,
+      error: "Error al obtener el conteo de emails no procesables",
+      data: 0
+    }
+  }
+}
+
+/**
+ * Obtener un email específico por ID con su metadata (solo si pertenece al usuario actual)
  */
 export async function getEmailById(id: string) {
   try {
-    const email = await prisma.email.findUnique({
-      where: { id },
+    const userId = await requireCurrentUserId()
+
+    const email = await prisma.email.findFirst({
+      where: { id, userId },
       include: {
         metadata: true
       }
@@ -160,10 +199,12 @@ export async function getEmailById(id: string) {
 }
 
 /**
- * Crear un nuevo email con su metadata opcional
+ * Crear un nuevo email con su metadata opcional, asociado al usuario actual
  */
 export async function createEmail(data: CreateEmailData) {
   try {
+    const userId = await requireCurrentUserId()
+
     // Validar datos de entrada
     const validatedData = CreateEmailSchema.parse(data)
     
@@ -178,6 +219,8 @@ export async function createEmail(data: CreateEmailData) {
           new Date(validatedData.email.receivedAt) :
           new Date(),
         processedAt: (validatedData.email.processedAt && new Date(validatedData.email.processedAt)) ?? null, // Null = no procesado
+        isProcessable: true,
+        userId,
         metadata: validatedData.metadata ? {
           create: validatedData.metadata
         } : undefined
@@ -202,16 +245,18 @@ export async function createEmail(data: CreateEmailData) {
 }
 
 /**
- * Actualizar un email existente y su metadata
+ * Actualizar un email existente y su metadata (solo si pertenece al usuario actual)
  */
 export async function updateEmail(id: string, data: UpdateEmailData) {
   try {
+    const userId = await requireCurrentUserId()
+
     // Validar datos de entrada
     const validatedData = UpdateEmailSchema.parse(data)
     
-    // Verificar que el email existe
-    const existingEmail = await prisma.email.findUnique({
-      where: { id },
+    // Verificar que el email existe y pertenece al usuario
+    const existingEmail = await prisma.email.findFirst({
+      where: { id, userId },
       include: { metadata: true }
     })
     
@@ -259,13 +304,15 @@ export async function updateEmail(id: string, data: UpdateEmailData) {
 }
 
 /**
- * Eliminar un email (soft delete)
+ * Eliminar un email (solo si pertenece al usuario actual)
  */
 export async function deleteEmail(id: string) {
   try {
+    const userId = await requireCurrentUserId()
+
     // Verificar que el email existe
-    const existingEmail = await prisma.email.findUnique({
-      where: { id }
+    const existingEmail = await prisma.email.findFirst({
+      where: { id, userId }
     })
     
     if (!existingEmail) {
@@ -292,19 +339,21 @@ export async function deleteEmail(id: string) {
 }
 
 /**
- * Aprobar un email procesado por IA
+ * Aprobar un email procesado por IA (solo si pertenece al usuario actual)
  * @param emailId - ID del email a aprobar
  * @returns Resultado con el email actualizado o error
  * @throws Error si el email no existe o no ha sido procesado
-  */ 
+ */ 
 export async function approveEmail(emailId: string) {
   try {
+    const userId = await requireCurrentUserId()
+
     // Validar entrada con Zod
     const validatedData = ApproveEmailSchema.parse({ emailId })
     
-    // Verificar que el email existe
-    const email = await prisma.email.findUnique({
-      where: { id: validatedData.emailId }
+    // Verificar que el email existe y pertenece al usuario
+    const email = await prisma.email.findFirst({
+      where: { id: validatedData.emailId, userId }
     })
     
     if (!email) {
@@ -356,19 +405,21 @@ export async function approveEmail(emailId: string) {
 }
 
 /**
- * Desaprobar un email (revertir aprobación)
+ * Desaprobar un email (revertir aprobación, solo del usuario actual)
  * @param emailId - ID del email a desaprobar
  * @returns Resultado con el email actualizado o error
  * @throws Error si el email no existe o no está aprobado
  */
 export async function unapproveEmail(emailId: string) {
   try {
+    const userId = await requireCurrentUserId()
+
     // Validar entrada con Zod
     const validatedData = UnapproveEmailSchema.parse({ emailId })
     
-    // Verificar que el email existe y está aprobado
-    const email = await prisma.email.findUnique({
-      where: { id: validatedData.emailId }
+    // Verificar que el email existe y pertenece al usuario
+    const email = await prisma.email.findFirst({
+      where: { id: validatedData.emailId, userId }
     })
     
     if (!email) {
@@ -412,24 +463,26 @@ export async function unapproveEmail(emailId: string) {
 }
 
 /**
- * Obtener emails filtrados por estado de aprobación
+ * Obtener emails filtrados por estado de aprobación (solo del usuario actual)
  * @param status - Filtro: "approved", "not-approved", "all"
  * @returns Lista de emails con metadata completa
  */
 export async function getEmailsByApprovalStatus(status: "approved" | "not-approved" | "all") {
   try {
+    const userId = await requireCurrentUserId()
+
     // Validar entrada con Zod
     const validatedData = GetEmailsByApprovalStatusSchema.parse({ status })
     
     // Construir cláusula where basada en el filtro
-    const whereClause = validatedData.status === "approved" 
+    const baseWhere = validatedData.status === "approved" 
       ? { processedAt: { not: null }, approvedAt: { not: null } }
       : validatedData.status === "not-approved"
       ? { processedAt: { not: null }, approvedAt: null }
       : {}; // "all" devuelve todos
     
     const emails = await prisma.email.findMany({
-      where: whereClause,
+      where: { userId, ...baseWhere },
       include: { metadata: true },
       orderBy: { receivedAt: 'desc' }
     })
@@ -445,12 +498,15 @@ export async function getEmailsByApprovalStatus(status: "approved" | "not-approv
 }
 
 /**
- * Obtener emails con tareas (para el Kanban)
+ * Obtener emails con tareas (para el Kanban) del usuario actual
  */
 export async function getEmailsWithTasks() {
   try {
+    const userId = await requireCurrentUserId()
+
     const emails = await prisma.email.findMany({
       where: {
+        userId,
         // HITO 4: Mostrar SOLO tareas de emails confirmados (processedAt != null)
         processedAt: { not: null },
         metadata: {
@@ -476,11 +532,14 @@ export async function getEmailsWithTasks() {
 }
 
 /**
- * Obtener emails recientes (para el dashboard)
+ * Obtener emails recientes (para el dashboard) del usuario actual
  */
 export async function getRecentEmails(limit: number = 5) {
   try {
+    const userId = await requireCurrentUserId()
+
     const emails = await prisma.email.findMany({
+      where: { userId },
       include: {
         metadata: true
       },
@@ -501,10 +560,13 @@ export async function getRecentEmails(limit: number = 5) {
 }
 
 /**
- * Importar emails desde archivo JSON con procesamiento por lotes
+ * Importar emails desde archivo JSON con procesamiento por lotes,
+ * asociando cada email al usuario autenticado
  */
 export async function importEmailsFromJSON(jsonData: string): Promise<ImportResult> {
   try {
+    const userId = await requireCurrentUserId()
+
     // Validar que el JSON es válido
     let parsedData: ImportEmailsData
     try {
@@ -543,7 +605,7 @@ export async function importEmailsFromJSON(jsonData: string): Promise<ImportResu
 
             try {
               // Crear email (mapeo: Product Brief -> Base de datos)
-              const email = await tx.email.create({
+              await tx.email.create({
                 data: {
                   idEmail: emailData.id,        // id del JSON -> idEmail de BD
                   from: emailData.email,        // email -> from
@@ -552,7 +614,9 @@ export async function importEmailsFromJSON(jsonData: string): Promise<ImportResu
                   receivedAt: emailData.received_at ?
                     new Date(emailData.received_at) :  // received_at -> receivedAt
                     new Date(),
-                  processedAt: null  // Por defecto null (sin procesar con IA)
+                  processedAt: null,  // Por defecto null (sin procesar con IA)
+                  isProcessable: true,  // HITO 1: todos los emails importados por JSON se marcan como procesables inicialmente
+                  userId
                   // Nota: EmailMetadata no se crea inicialmente
                   // Se creará cuando se procese con IA posteriormente
                 }
@@ -613,10 +677,14 @@ export async function importEmailsFromJSON(jsonData: string): Promise<ImportResu
 
 /**
  * Obtiene el remitente (campo `from`) más frecuente en la base de datos
+ * para el usuario autenticado
  */
 export async function getMostFrequentSender() {
   try {
+    const userId = await requireCurrentUserId()
+
     const emails = await prisma.email.findMany({
+      where: { userId },
       select: {
         from: true,
       },
@@ -663,12 +731,16 @@ export async function getMostFrequentSender() {
 
 /**
  * Obtiene el conteo de emails por categoría desde EmailMetadata
+ * para el usuario autenticado
  * Retorna un array con el conteo por cada categoría
  */
 export async function getEmailsByCategory() {
   try {
-    // Obtener todos los metadatos con categoría
+    const userId = await requireCurrentUserId()
+
+    // Obtener todos los metadatos con categoría de los emails del usuario
     const emailsWithMetadata = await prisma.email.findMany({
+      where: { userId },
       include: {
         metadata: {
           select: {
@@ -717,16 +789,18 @@ export async function getEmailsByCategory() {
   }
 }
 
-
-
 /**
  * Obtiene el conteo de emails por prioridad desde EmailMetadata
+ * para el usuario autenticado
  * Retorna un array con el conteo por cada prioridad
  */
 export async function getEmailsByPriority() {
   try {
-    // Obtener todos los emails con su metadata
+    const userId = await requireCurrentUserId()
+
+    // Obtener todos los emails con su metadata del usuario actual
     const emailsWithMetadata = await prisma.email.findMany({
+      where: { userId },
       include: {
         metadata: {
           select: {

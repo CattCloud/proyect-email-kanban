@@ -78,7 +78,9 @@ export default function EmailMetadataSidebar({ email }: Props) {
                 <AlertTriangle className="w-3 h-3" aria-hidden />
                 Aún sin procesar
               </span>
-              <Button
+              {
+                /*
+                              <Button
                 type="button"
                 variant="outline"
                 size="md"
@@ -87,6 +89,10 @@ export default function EmailMetadataSidebar({ email }: Props) {
               >
                 Procesar ahora (Semana 2)
               </Button>
+                */
+
+              }
+
             </div>
           )}
           {email.approvedAt !== null && (

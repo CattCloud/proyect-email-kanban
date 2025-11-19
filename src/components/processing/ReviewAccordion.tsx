@@ -41,6 +41,29 @@ export interface ReviewEmailItem {
   createdAt: string | Date;
   processedAt: Date | null;
   metadata: ReviewMetadata | null;
+  rejectionReason?: string | null;
+  previousAIResult?: unknown | null;
+}
+
+// Función para determinar si un email fue rechazado recientemente (en los últimos 5 minutos)
+function isRecentlyRejected(email: ReviewEmailItem): boolean {
+  // Un email está rechazado si:
+  // 1. Tiene rejectionReason (fue rechazado)
+  // 2. processedAt es null (fue revertido a estado no procesado)
+  // 3. previousAIResult no es null (tiene snapshot del análisis descartado)
+  if (!email.rejectionReason || email.processedAt !== null || !email.previousAIResult) {
+    return false;
+  }
+  
+  // Verificar si el rechazo fue reciente (últimos 5 minutos)
+  // Como no tenemos un campo rejectedAt, usamos createdAt como aproximación temporal
+  const now = new Date().getTime();
+  const created = new Date(email.createdAt).getTime();
+  const fiveMinutesInMs = 5 * 60 * 1000;
+  
+  // Si el email fue creado hace más de 5 minutos, no puede ser un rechazo reciente
+  // Esta es una aproximación: asumimos que los rechazos ocurren poco después de la importación
+  return now - created < fiveMinutesInMs;
 }
 
 // Formateo de fecha legible en español
@@ -319,6 +342,7 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
             const busyForEmail = isGlobalPending || busyById[email.id] != null;
             const busyAccept = busyById[email.id] === "accept";
             const busyReject = busyById[email.id] === "reject";
+            const isRejected = isRecentlyRejected(email);
 
             return (
               <article
@@ -330,8 +354,16 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
                 {/* Encabezado compacto */}
                 <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[color:var(--color-border-light)]">
                   <div className="min-w-0 space-y-1">
-                    <div className="text-xs text-[color:var(--color-primary-600)] font-medium">
-                      Recibido: {formatReadableDate(email.receivedAt)}
+                    <div className="flex items-center gap-2">
+                      <div className="text-xs text-[color:var(--color-primary-600)] font-medium">
+                        Recibido: {formatReadableDate(email.receivedAt)}
+                      </div>
+                      {/* Badge "Rechazado" para emails rechazados recientemente */}
+                      {isRejected && (
+                        <span className="badge-email-rechazado inline-flex items-center px-2 py-0.5 rounded text-xs">
+                          Rechazado
+                        </span>
+                      )}
                     </div>
                     <h3
                       id={`rev-${email.id}-title`}

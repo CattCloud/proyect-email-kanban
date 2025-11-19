@@ -775,6 +775,13 @@
     font-weight: var(--font-weight-medium);
   }
 
+  .badge-email-rechazado {
+    background-color: var(--color-danger-100);
+    color: var(--color-danger-800);
+    border: 1px solid var(--color-danger-300);
+    font-weight: var(--font-weight-medium);
+  }
+
   /* ============================================
    * EMAIL NUEVO - Resaltado de fila
    * ============================================ */
@@ -796,6 +803,29 @@
   .email-card-nuevo:hover {
     border-color: var(--color-primary-500);
     background-color: var(--color-primary-100);
+  }
+
+  /* ============================================
+   * EMAIL RECHAZADO - Resaltado de fila
+   * ============================================ */
+  .email-row-rechazado {
+    background-color: var(--color-danger-50);
+    border-left: 4px solid var(--color-danger-500);
+  }
+
+  .email-row-rechazado:hover {
+    background-color: var(--color-danger-100);
+    border-left: 4px solid var(--color-danger-600);
+  }
+
+  .email-card-rechazado {
+    border: 2px solid var(--color-danger-300);
+    background-color: var(--color-danger-50);
+  }
+
+  .email-card-rechazado:hover {
+    border-color: var(--color-danger-500);
+    background-color: var(--color-danger-100);
   }
 
   /* ============================================

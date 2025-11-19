@@ -93,3 +93,16 @@ Notificaciones
 Multi-workspace
 Team Collaboration
 
+Workflow Semanal:
+Semana 1 - MVP Mínimo Viable
+L (Clase 31): Setup + UI con datos mock
+M (Clase 32): Primera feature con DB real
+Entregable: Feature 1 desplegada y funcionando
+Semana 2 - Features Core
+L (Clase 33): Feature 2 con relaciones 1:N
+M (Clase 34): Feature 3 + Auth básica
+Entregable: MVP completo con 3 features
+Semana 3 - Polish + Demo
+L (Clase 35): Feature diferenciadora + documentación
+M (Clase 36): Demo Day
+Entregable: Proyecto completo + presentación

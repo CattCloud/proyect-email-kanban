@@ -17,7 +17,7 @@ export default async function ReviewPage() {
     return (
       <section className="card-base p-6">
         <h1 className="text-lg font-semibold text-[color:var(--color-text-primary)] mb-2">
-          Revisión de IA
+          Emails Procesados
         </h1>
         <p className="text-[color:var(--color-danger-500)]">
           Error al cargar resultados pendientes: {pending.error ?? "Error desconocido"}
@@ -39,7 +39,7 @@ export default async function ReviewPage() {
     return (
       <section className="card-base p-6">
         <h1 className="text-lg font-semibold text-[color:var(--color-text-primary)] mb-2">
-          Revisión de IA
+          Emails Procesados
         </h1>
         <p className="text-[color:var(--color-text-secondary)]">
           No hay resultados de IA pendientes de revisión.
@@ -59,7 +59,7 @@ export default async function ReviewPage() {
     <section aria-label="Revisión de resultados de IA" className="space-y-4">
       <header className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-[color:var(--color-text-primary)]">
-          Revisión de IA
+          Emails Procesados
         </h1>
         <div className="text-sm text-[color:var(--color-text-secondary)]">
           Pendientes: {items.length}

@@ -5,7 +5,7 @@
 export interface NavigationItem {
   label: string;
   href: string;
-  icon: 'Home' | 'Mail' | 'Columns';
+  icon: 'Home' | 'Mail' | 'Columns' | 'Brain';
   description?: string;
 }
 
@@ -24,9 +24,9 @@ export const navigationItems: NavigationItem[] = [
     description: 'Gestión de emails'
   },
   {
-    label: 'Revisión IA',
+    label: 'Emails Procesados',
     href: '/processing/review',
-    icon: 'Columns',
+    icon: 'Brain',
     description: 'Revisión y confirmación de IA'
   },
   {
