@@ -103,7 +103,7 @@ export async function getUnprocessedEmails(
     const userId = await requireCurrentUserId();
     const { page: p, pageSize: ps } = PaginationSchema.parse({ page, pageSize });
 
-    const where: Prisma.EmailWhereInput = {
+    const where = {
       processedAt: null,
       isProcessable: true,
       user: {
@@ -111,7 +111,7 @@ export async function getUnprocessedEmails(
           id: userId,
         },
       },
-    };
+    } as unknown as Prisma.EmailWhereInput;
 
     const [total, data] = await Promise.all([
       prisma.email.count({ where }),
@@ -341,7 +341,7 @@ export async function getPendingAIResults(
             id: userId,
           },
         },
-      },
+      } as unknown as Prisma.EmailWhereInput,
       include: {
         metadata: {
           include: { tasks: true },
@@ -551,7 +551,7 @@ export async function getPendingAllAIResults(): Promise<GenericActionResult> {
           },
         },
       },
-    };
+    } as unknown as Prisma.EmailWhereInput;
 
     const data = await prisma.email.findMany({
       where,
