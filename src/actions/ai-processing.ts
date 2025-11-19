@@ -103,11 +103,15 @@ export async function getUnprocessedEmails(
     const userId = await requireCurrentUserId();
     const { page: p, pageSize: ps } = PaginationSchema.parse({ page, pageSize });
 
-    const where = {
-      userId,
+    const where: Prisma.EmailWhereInput = {
       processedAt: null,
       isProcessable: true,
-    } as Prisma.EmailWhereInput;
+      user: {
+        is: {
+          id: userId,
+        },
+      },
+    };
 
     const [total, data] = await Promise.all([
       prisma.email.count({ where }),
@@ -160,8 +164,12 @@ export async function processEmailsWithAI(
     const emails = await prisma.email.findMany({
       where: {
         id: { in: ids },
-        userId,
         isProcessable: true,
+        user: {
+          is: {
+            id: userId,
+          },
+        },
       },
     });
 
@@ -324,11 +332,15 @@ export async function getPendingAIResults(
     const data = await prisma.email.findMany({
       where: {
         id: { in: ids },
-        userId,
         // Emails ya procesados por IA pero aún no aprobados
         processedAt: { not: null },
         approvedAt: null,
         isProcessable: true,
+        user: {
+          is: {
+            id: userId,
+          },
+        },
       },
       include: {
         metadata: {
@@ -371,7 +383,11 @@ export async function confirmAIResults(
     const existing = await prisma.email.findFirst({
       where: {
         id,
-        userId,
+        user: {
+          is: {
+            id: userId,
+          },
+        },
       },
       include: {
         metadata: {
@@ -476,7 +492,11 @@ export async function updateProcessedAt(
     const result = await prisma.email.updateMany({
       where: {
         id: { in: ids },
-        userId,
+        user: {
+          is: {
+            id: userId,
+          },
+        },
       },
       data: { processedAt: new Date() },
     });
@@ -510,11 +530,16 @@ export async function getPendingAllAIResults(): Promise<GenericActionResult> {
     const userId = await requireCurrentUserId();
 
     const where = {
-      userId,
       // Emails ya procesados por IA pero aún no aprobados
       processedAt: { not: null },
       approvedAt: null,
       isProcessable: true,
+      // Filtrar por usuario dueño del email
+      user: {
+        is: {
+          id: userId,
+        },
+      },
       // Deben existir resultados IA a revisar (metadata creada) y
       // sus tareas no pueden estar en "doing" ni "done".
       metadata: {
