@@ -503,4 +503,396 @@ Al final de esta clase debes tener:
 ✅ Commit con mensaje claro: “feat: Feature 1 with real database”
 © Enter Tech School 2025
 ---
+Lab 32: Feature 1 con Base de Datos Real
+Tu Feature 1 pasa de mock a PostgreSQL. Hoy diseñas el schema, implementas API routes y conectas frontend con backend. Al terminar, Feature 1 estará desplegada y operativa en producción.
 
+🎯 Objetivos
+Diseñar schema Prisma con relaciones y validaciones
+Implementar CRUD con Next.js API routes
+Conectar frontend con backend usando fetch
+Desplegar con migraciones a producción
+📋 Workflow del Día
+1. Diseño de Schema (30 min)
+Validación con IA:
+
+Usa este prompt con Claude/ChatGPT:
+
+Actúa como arquitecto de bases de datos. Mi Feature 1 es: [DESCRIPCIÓN].
+
+Necesito un schema Prisma para PostgreSQL que incluya:
+- Modelo principal: [NOMBRE]
+- Campos necesarios: [LISTAR]
+- Validaciones importantes: [LISTAR]
+
+Dame:
+1. Schema Prisma completo con tipos correctos
+2. Validaciones recomendadas (@db.VarChar, @default, etc)
+3. Índices para optimizar queries comunes
+4. Considera extensibilidad para Features 2 y 3
+
+Sé específico y profesional.
+Implementación:
+
+# Setup Neon
+# 1. Crear DB en neon.tech
+# 2. Copiar connection string
+
+# Configurar Prisma
+npm install prisma @prisma/client
+npx prisma init
+
+# En .env
+DATABASE_URL="postgresql://..."
+Archivo prisma/schema.prisma:
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model YourModel {
+  id        String   @id @default(cuid())
+  // Campos según tu Feature 1
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([campoFrecuente])
+}
+Deploy schema:
+
+npx prisma db push
+npx prisma generate
+Checkpoint 1: Schema en Neon funcionando
+
+2. API Routes CRUD (40 min)
+Estructura recomendada:
+
+app/api/
+  your-entity/
+    route.ts          # GET (all), POST
+    [id]/
+      route.ts        # GET (one), PATCH, DELETE
+GET all - app/api/your-entity/route.ts:
+
+import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+
+export async function GET() {
+  try {
+    const items = await prisma.yourModel.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+    return NextResponse.json(items);
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'Failed to fetch' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    // Validar con Zod aquí (opcional pero recomendado)
+    
+    const item = await prisma.yourModel.create({
+      data: body
+    });
+    return NextResponse.json(item, { status: 201 });
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'Failed to create' },
+      { status: 500 }
+    );
+  }
+}
+GET one/PATCH/DELETE - app/api/your-entity/[id]/route.ts:
+
+import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+
+export async function GET(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const item = await prisma.yourModel.findUnique({
+      where: { id: params.id }
+    });
+    
+    if (!item) {
+      return NextResponse.json(
+        { error: 'Not found' },
+        { status: 404 }
+      );
+    }
+    
+    return NextResponse.json(item);
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'Failed to fetch' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const body = await request.json();
+    const item = await prisma.yourModel.update({
+      where: { id: params.id },
+      data: body
+    });
+    return NextResponse.json(item);
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'Failed to update' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    await prisma.yourModel.delete({
+      where: { id: params.id }
+    });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'Failed to delete' },
+      { status: 500 }
+    );
+  }
+}
+Singleton Prisma Client - lib/prisma.ts:
+
+import { PrismaClient } from '@prisma/client';
+
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+};
+
+export const prisma =
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    log: ['query'],
+  });
+
+if (process.env.NODE_ENV !== 'production') 
+  globalForPrisma.prisma = prisma;
+Testing con Thunder Client/Postman:
+
+GET all → debe retornar array vacío
+POST → crear item
+GET one → verificar item creado
+PATCH → actualizar
+DELETE → eliminar
+Checkpoint 2: API routes operativas
+
+3. Integración Frontend-Backend (50 min)
+Service layer - lib/api/your-entity.ts:
+
+export interface YourEntity {
+  id: string;
+  // campos según tu modelo
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export async function fetchAll(): Promise<YourEntity[]> {
+  const res = await fetch('/api/your-entity');
+  if (!res.ok) throw new Error('Failed to fetch');
+  return res.json();
+}
+
+export async function create(data: Omit<YourEntity, 'id' | 'createdAt' | 'updatedAt'>): Promise<YourEntity> {
+  const res = await fetch('/api/your-entity', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  if (!res.ok) throw new Error('Failed to create');
+  return res.json();
+}
+
+export async function update(id: string, data: Partial<YourEntity>): Promise<YourEntity> {
+  const res = await fetch(`/api/your-entity/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  if (!res.ok) throw new Error('Failed to update');
+  return res.json();
+}
+
+export async function remove(id: string): Promise<void> {
+  const res = await fetch(`/api/your-entity/${id}`, {
+    method: 'DELETE'
+  });
+  if (!res.ok) throw new Error('Failed to delete');
+}
+Actualizar componente principal:
+
+'use client';
+
+import { useEffect, useState } from 'react';
+import { fetchAll, create, update, remove } from '@/lib/api/your-entity';
+import type { YourEntity } from '@/lib/api/your-entity';
+
+export default function YourFeaturePage() {
+  const [items, setItems] = useState<YourEntity[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadItems();
+  }, []);
+
+  async function loadItems() {
+    try {
+      setLoading(true);
+      const data = await fetchAll();
+      setItems(data);
+    } catch (err) {
+      setError('Failed to load items');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleCreate(formData: any) {
+    try {
+      const newItem = await create(formData);
+      setItems([newItem, ...items]);
+    } catch (err) {
+      setError('Failed to create');
+    }
+  }
+
+  async function handleDelete(id: string) {
+    try {
+      await remove(id);
+      setItems(items.filter(item => item.id !== id));
+    } catch (err) {
+      setError('Failed to delete');
+    }
+  }
+
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error}</div>;
+
+  return (
+    <div>
+      {/* Tu UI aquí */}
+      {items.map(item => (
+        <div key={item.id}>
+          {/* Renderizar item */}
+          <button onClick={() => handleDelete(item.id)}>
+            Delete
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+Mejoras recomendadas:
+
+Loading skeletons en lugar de “Loading…”
+Toast notifications para feedback
+Optimistic updates
+Error boundaries
+Checkpoint 3: Frontend consumiendo backend correctamente
+
+🚀 Deploy a Producción
+# Variables de entorno en Vercel
+# Settings → Environment Variables
+DATABASE_URL=postgresql://...
+
+# Deploy
+git add .
+git commit -m "feat: Feature 1 with PostgreSQL"
+git push
+
+# Vercel auto-deploya
+# Verificar en dashboard que migraciones corrieron
+Validación post-deploy:
+
+Crear item desde producción
+Verificar en Neon Data Browser
+Eliminar item
+Todo debe funcionar idéntico a local
+🎯 Checkpoints
+✅ Schema Prisma diseñado y migrado a Neon
+✅ API routes CRUD implementadas y testeadas
+✅ Frontend conectado con estados loading/error
+✅ Deploy exitoso con Feature 1 operativa
+✅ Commit descriptivo en repo
+💡 Tips Profesionales
+Schema design:
+
+Usa @default(cuid()) para IDs únicos
+createdAt/updatedAt en todos los modelos
+Índices en campos que usarás en WHERE frecuentemente
+API routes:
+
+Validar inputs con Zod antes de Prisma
+Catch errors específicos (P2002 = unique constraint)
+Logs claros para debugging
+Frontend:
+
+Separar lógica de API en service layer
+useState para data, loading, error siempre juntos
+useEffect con dependency array correcto
+Performance:
+
+Prisma Client singleton (evita múltiples conexiones)
+Connection pooling ya viene con Neon
+prisma.$disconnect() no necesario en serverless
+📅 Preparación Async
+Para Checkpoint 1 (fin de semana):
+
+Feature 1 pulida:
+Validaciones completas
+UI profesional con shadcn
+Estados de error bien manejados
+Loading skeletons
+Feature 2 diseñada:
+Mockup generado
+Schema Prisma diseñado (¿relación con Feature 1?)
+Datos mock preparados
+Documentación:
+README con instrucciones de setup
+Variables de entorno listadas
+Decisiones técnicas importantes
+Tiempo estimado: 4-5 horas
+
+⚠️ Troubleshooting Común
+Error: Prisma Client not generated
+
+npx prisma generate
+Error: Connection timeout en Vercel
+
+Vercel tiene límite de 10s por request
+Optimiza queries complejos
+Usa connection pooling de Neon
+Error: ENV vars no disponibles en build
+
+Agregar en Vercel settings
+Redeploy después de agregar
+Schema changes no reflejan
+
+npx prisma db push --force-reset  # ⚠️ Solo en dev
+npx prisma generate
+© Enter Tech School 2025

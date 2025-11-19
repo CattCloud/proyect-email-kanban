@@ -170,7 +170,7 @@ export async function processEmailsWithAI(
             id: userId,
           },
         },
-      },
+      } as unknown as Prisma.EmailWhereInput,
     });
 
     if (emails.length === 0) {
