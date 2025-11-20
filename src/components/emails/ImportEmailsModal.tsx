@@ -213,7 +213,7 @@ export default function ImportEmailsModal({ onImported }: ImportEmailsModalProps
           leftIcon={<Upload className="w-4 h-4" />}
           aria-label="Abrir modal para importar emails en formato JSON"
         >
-          Importar Emails
+          Importar Emails JSON
         </Button>
       </div>
 

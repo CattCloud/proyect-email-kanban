@@ -180,12 +180,15 @@ function mapGmailMessageToEmailInput(
 }
 
 /**
- * Obtiene la lista de mensajes recientes (últimos 7 días) para un usuario,
+ * Obtiene la lista de mensajes recientes (últimos N días) para un usuario,
  * y los mapea a objetos GmailEmailInput listos para ser persistidos.
  *
  * Capa 1 (Gmail API): se usa query optimizada para excluir categorías irrelevantes.
  */
-async function fetchRecentGmailEmailsForUser(userId: string): Promise<{
+async function fetchRecentGmailEmailsForUser(
+  userId: string,
+  days: number
+): Promise<{
   emails: GmailEmailInput[];
   error?: string;
 }> {
@@ -199,9 +202,11 @@ async function fetchRecentGmailEmailsForUser(userId: string): Promise<{
 
   const client = clientResult.client;
   try {
+    const safeDays = Number.isFinite(days) && days > 0 ? Math.floor(days) : 7;
+
     const listResponse = await client.users.messages.list({
       userId: "me",
-      q: "in:inbox newer_than:7d -category:promotions -category:social -category:updates",
+      q: `in:inbox newer_than:${safeDays}d -category:promotions -category:social -category:updates`,
       maxResults: 100,
     });
 
@@ -336,17 +341,27 @@ export async function getGmailConnectionStatusForCurrentUser(): Promise<GmailCon
 // -----------------------------------------------------------------------------
 
 /**
- * Importa correos recientes de Gmail (últimos 7 días, Inbox filtrado) para el usuario autenticado.
+ * Importa correos recientes de Gmail (últimos N días, Inbox filtrado) para el usuario autenticado.
  * - Usa Gmail API para obtener mensajes recientes con query optimizada (Capa 1).
  * - Evalúa contenido para marcar isProcessable (Capa 2).
  * - Inserta en Email uno por uno, sin transacción larga (evita timeout).
  * - Ignora errores de clave única (P2002) para no duplicar por idEmail.
+ *
+ * @param rangeDays Número de días hacia atrás a considerar (1 = hoy, 7 = últimos 7 días, etc.)
  */
-export async function importGmailInboxForCurrentUser(): Promise<GmailImportResult> {
+export async function importGmailInboxForCurrentUser(
+  rangeDays: number = 7,
+): Promise<GmailImportResult> {
   try {
     const userId = await requireCurrentUserId();
 
-    const { emails, error } = await fetchRecentGmailEmailsForUser(userId);
+    const effectiveRangeDays =
+      Number.isFinite(rangeDays) && rangeDays > 0 ? Math.floor(rangeDays) : 7;
+
+    const { emails, error } = await fetchRecentGmailEmailsForUser(
+      userId,
+      effectiveRangeDays,
+    );
 
     if (error && emails.length === 0) {
       // Error crítico sin datos aprovechables

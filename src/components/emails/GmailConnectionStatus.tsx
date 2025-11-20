@@ -50,6 +50,9 @@ export default function GmailConnectionStatus({
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  const [rangeDays, setRangeDays] = useState<number>(1);
+  const [importedCount, setImportedCount] = useState<number | null>(null);
+
   // Estado de progreso para la importación (bloquea la ventana con overlay)
   const [importProgress, setImportProgress] = useState<ImportProgressState>({
     active: false,
@@ -120,6 +123,14 @@ export default function GmailConnectionStatus({
     };
   }, []);
 
+  useEffect(() => {
+    if (importedCount === null || importedCount <= 0) return;
+    const timer = window.setTimeout(() => {
+      setImportedCount(null);
+    }, 4000);
+    return () => window.clearTimeout(timer);
+  }, [importedCount]);
+
   function formatLastSync(lastSyncAt: Date | null): string {
     if (!lastSyncAt) {
       return "Nunca sincronizado";
@@ -135,6 +146,14 @@ export default function GmailConnectionStatus({
       minute: "2-digit",
     });
     return `Última actualización: ${date} ${time}`;
+  }
+
+  function describeRangeForUser(days: number): string {
+    if (days <= 1) return "hoy";
+    if (days === 7) return "los últimos 7 días";
+    if (days === 15) return "los últimos 15 días";
+    if (days === 30) return "los últimos 30 días";
+    return `los últimos ${days} días`;
   }
 
   function handleConnectClick() {
@@ -163,7 +182,10 @@ export default function GmailConnectionStatus({
           status: "running",
         }));
 
-        const result = await importGmailInboxForCurrentUser();
+        const effectiveRangeDays =
+          Number.isFinite(rangeDays) && rangeDays > 0 ? Math.floor(rangeDays) : 7;
+
+        const result = await importGmailInboxForCurrentUser(effectiveRangeDays);
 
         // Avance lógico de pasos tras la llamada principal
         setImportProgress((prev) => ({
@@ -173,6 +195,8 @@ export default function GmailConnectionStatus({
           status: "running",
         }));
 
+        const rangeDescription = describeRangeForUser(effectiveRangeDays);
+
         // Construir mensaje final según resultado
         let message: string;
         if (!result.success && result.errors.length > 0) {
@@ -180,18 +204,22 @@ export default function GmailConnectionStatus({
           message = result.errors[0];
         } else if (result.imported === 0 && result.nonProcessable > 0) {
           // Solo hubo correos no procesables
-          message = "No hay nuevos correos de negocio en los últimos 7 días.";
+          message = `No hay nuevos correos de negocio en ${rangeDescription}.`;
         } else if (result.imported === 0 && result.nonProcessable === 0) {
           // No hubo nuevos correos en Gmail
-          message = "No tienes nuevos correos en los últimos días.";
+          message = `No tienes nuevos correos en ${rangeDescription}.`;
         } else if (result.imported > 0 && result.nonProcessable > 0) {
           // Mezcla: algunos importados y otros descartados
-          message = `Se importaron ${result.imported} correos nuevos, ${result.nonProcessable} descartados por filtros.`;
+          message = `Se importaron ${result.imported} correos nuevos y ${result.nonProcessable} se descartaron por filtros en ${rangeDescription}.`;
         } else {
           // Solo importados procesables
-          message = `Se importaron ${result.imported} correos nuevos.`;
+          message = `Se importaron ${result.imported} correos nuevos en ${rangeDescription}.`;
         }
         setImportMessage(message);
+
+        if (result.imported > 0) {
+          setImportedCount(result.imported);
+        }
 
         // Paso final: Actualizando tu bandeja de entrada…
         const serverStatus = await fetchStatusFromServer();
@@ -269,7 +297,7 @@ export default function GmailConnectionStatus({
           ) : showConnectButton ? (
             <span className="text-[color:var(--color-text-secondary)]">
               Aún no has conectado tu Gmail. Conéctalo para importar los correos
-              de los últimos 7 días de tu bandeja de entrada.
+              de los últimos días de tu bandeja de entrada.
             </span>
           ) : (
             <span className="text-[color:var(--color-text-secondary)]">
@@ -292,9 +320,23 @@ export default function GmailConnectionStatus({
           )}
 
           {showImportButton && (
+            <select
+              value={rangeDays}
+              onChange={(e) => setRangeDays(Number(e.target.value))}
+              className="px-2 py-2 rounded-md border border-[color:var(--color-border-light)] bg-[color:var(--color-bg-card)] text-sm"
+              aria-label="Seleccionar rango de tiempo para importar correos"
+            >
+              <option value={1}>Hoy</option>
+              <option value={7}>Últimos 7 días</option>
+              <option value={15}>Últimos 15 días</option>
+              <option value={30}>Últimos 30 días</option>
+            </select>
+          )}
+
+          {showImportButton && (
             <Button
               type="button"
-              variant="outline"
+              variant="primary"
               size="md"
               onClick={handleImportClick}
               disabled={isPending}
@@ -309,9 +351,15 @@ export default function GmailConnectionStatus({
               aria-label="Importar correos recientes de Gmail"
             >
               {isPending
-                ? "Importando correos recientes…"
-                : "Importar correos recientes"}
+                ? "Importando Correos…"
+                : "Importar de Gmail"}
             </Button>
+          )}
+
+          {importedCount !== null && importedCount > 0 && (
+            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-[color:var(--color-primary-50)] text-[color:var(--color-primary-700)] border border-[color:var(--color-primary-200)]">
+              +{importedCount} importados
+            </span>
           )}
         </div>
       </div>
