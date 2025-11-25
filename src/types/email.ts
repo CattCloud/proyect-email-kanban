@@ -28,6 +28,7 @@ export interface PrismaEmail {
   approvedAt: Date | null; // Null = no aprobado, fecha = aprobado
   rejectionReason: string | null; // Motivo del último rechazo de IA
   previousAIResult: unknown | null; // Snapshot del análisis IA descartado
+  rejectedAt: Date | null; // Fecha/hora del último rechazo de IA
   isProcessable: boolean; // Indica si el email es procesable por IA
 
   /**

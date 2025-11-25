@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  //url      = env("DATABASE_URL")
 }
 
 model User {
@@ -32,6 +32,7 @@ model Email {
   metadata     EmailMetadata?
   rejectionReason  String?    // Motivo del último rechazo (checkbox o texto libre)
   previousAIResult Json?      // Snapshot JSON del análisis IA descartado
+  rejectedAt      DateTime?   // Fecha/hora del último rechazo de IA
 
   // Asociación por usuario (multiusuario)
   userId String
@@ -42,6 +43,7 @@ model Email {
   @@index([subject])
   @@index([processedAt])
   @@index([approvedAt])
+  @@index([rejectedAt])
   @@index([processedAt, approvedAt])
   @@index([receivedAt])
   @@index([createdAt])

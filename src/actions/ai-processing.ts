@@ -438,6 +438,7 @@ export async function confirmAIResults(
           approvedAt: new Date(),
           rejectionReason: null,
           previousAIResult: Prisma.JsonNull,
+          rejectedAt: null,
         },
         include: {
           metadata: {
@@ -463,6 +464,7 @@ export async function confirmAIResults(
             approvedAt: null,
             rejectionReason: normalizedReason,
             previousAIResult: previousAIResultSnapshot,
+            rejectedAt: new Date(),
           },
         });
       });

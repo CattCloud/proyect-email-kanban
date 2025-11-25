@@ -17,6 +17,7 @@ import {
   EmailFilterEstado,
   EmailFilterCategoria,
   EmailFilterAprobacion,
+  EmailFilterPriority,
   SortDirection,
 } from "@/types";
 import type {
@@ -59,21 +60,24 @@ function isRecentlyRejected(email: EmailWithMetadata): boolean {
   // 1. Tiene rejectionReason (fue rechazado)
   // 2. processedAt es null (fue revertido a estado no procesado)
   // 3. previousAIResult no es null (tiene snapshot del análisis descartado)
-  if (!email.rejectionReason || email.processedAt !== null || !email.previousAIResult) {
+  // 4. rejectedAt tiene una marca de tiempo válida
+  if (
+    !email.rejectionReason ||
+    email.processedAt !== null ||
+    !email.previousAIResult ||
+    !email.rejectedAt
+  ) {
     return false;
   }
-  
-  // Verificar si el rechazo fue reciente (últimos 5 minutos)
-  // Como no tenemos un campo rejectedAt, usamos processedAt como referencia
-  // pero dado que processedAt es null después del rechazo, necesitamos otra estrategia
-  // Usaremos createdAt como aproximación temporal
-  const now = new Date().getTime();
-  const created = new Date(email.createdAt).getTime();
+
+  const now = Date.now();
+  const rejectedAtTs = new Date(email.rejectedAt).getTime();
+  if (Number.isNaN(rejectedAtTs)) return false;
+
   const fiveMinutesInMs = 5 * 60 * 1000;
-  
-  // Si el email fue creado hace más de 5 minutos, no puede ser un rechazo reciente
-  // Esta es una aproximación: asumimos que los rechazos ocurren poco después de la importación
-  return now - created < fiveMinutesInMs;
+
+  // Solo se considera "reciente" si el rechazo fue en los últimos 5 minutos
+  return now - rejectedAtTs < fiveMinutesInMs;
 }
 
 function formatRelative(iso: string): string {
@@ -94,6 +98,22 @@ function formatRelative(iso: string): string {
   return `${day} ${month} ${year}`;
 }
 
+// Función para truncar texto y agregar puntos suspensivos
+function truncateText(text: string, maxLength: number = 100): string {
+  if (!text || text.length <= maxLength) {
+    return text || "";
+  }
+  return text.slice(0, maxLength).trim() + "...";
+}
+
+// Función para limpiar texto HTML y obtener solo el texto plano
+function cleanHtmlText(htmlText: string): string {
+  // Remover tags HTML básicos y decodificar entidades HTML
+  const div = document.createElement('div');
+  div.innerHTML = htmlText;
+  return div.textContent || div.innerText || '';
+}
+
 export default function EmailTable() {
   const router = useRouter();
   const requestIdRef = useRef(0);
@@ -109,6 +129,8 @@ export default function EmailTable() {
     useState<EmailFilterCategoria>("todas");
   const [filterAprobacion, setFilterAprobacion] =
     useState<EmailFilterAprobacion>("todos");
+  const [filterPrioridad, setFilterPrioridad] =
+    useState<EmailFilterPriority>("todas");
 
   // Data State
   const [emails, setEmails] = useState<EmailWithMetadata[]>([]);
@@ -218,7 +240,30 @@ export default function EmailTable() {
     [emails, selected],
   );
 
-  // Filtrar por búsqueda, estado y categoría
+  // Contadores por estado (para chips visuales)
+  const estadoCounts = useMemo(() => {
+    let aprobados = 0;
+    let procesados = 0;
+    let sinProcesar = 0;
+
+    for (const e of emails) {
+      if (e.processedAt === null) {
+        sinProcesar += 1;
+      } else if (e.approvedAt !== null) {
+        aprobados += 1;
+      } else {
+        procesados += 1;
+      }
+    }
+
+    return { aprobados, procesados, sinProcesar };
+  }, [emails]);
+
+  // Filtros IA adicionales (categoría/aprobación/prioridad) solo tienen sentido cuando hay metadata IA
+  const showIAFilters =
+    filterEstado === "procesado" || filterEstado === "aprobado";
+
+  // Filtrar por búsqueda, estado y categoría/prioridad
   const filtered = useMemo(() => {
     let data = [...emails];
 
@@ -235,11 +280,18 @@ export default function EmailTable() {
         return e.processedAt !== null && e.approvedAt !== null;
       });
     }
-    // Filtro por categoría
+
+    // Filtro por categoría (solo tiene sentido cuando hay metadata IA)
     if (filterCategoria !== "todas") {
       data = data.filter((e) => e.metadata?.category === filterCategoria);
     }
-    // Filtro por aprobación
+
+    // Filtro por prioridad IA
+    if (filterPrioridad !== "todas") {
+      data = data.filter((e) => e.metadata?.priority === filterPrioridad);
+    }
+
+    // Filtro por aprobación (aprobado / no-aprobado dentro de procesados)
     if (filterAprobacion !== "todos") {
       data = data.filter((e) => {
         if (filterAprobacion === "aprobado") {
@@ -249,6 +301,7 @@ export default function EmailTable() {
         return e.processedAt !== null && e.approvedAt === null;
       });
     }
+
     // Búsqueda
     if (query.trim() !== "") {
       const q = query.toLowerCase();
@@ -273,7 +326,15 @@ export default function EmailTable() {
       return cb - ca; // Siempre descendente para createdAt
     });
     return data;
-  }, [emails, query, sortDir, filterEstado, filterCategoria, filterAprobacion]);
+  }, [
+    emails,
+    query,
+    sortDir,
+    filterEstado,
+    filterCategoria,
+    filterPrioridad,
+    filterAprobacion,
+  ]);
 
   // Paginación
   const total = filtered.length;
@@ -356,6 +417,71 @@ export default function EmailTable() {
     setPage(1);
   }
 
+  // Helpers para chips de categoría/prioridad
+  function handleCategoriaChipClick(value: EmailFilterCategoria) {
+    setFilterCategoria((prev) => (prev === value ? "todas" : value));
+    resetPaging();
+  }
+
+  function handlePrioridadChipClick(value: EmailFilterPriority) {
+    setFilterPrioridad((prev) => (prev === value ? "todas" : value));
+    resetPaging();
+  }
+
+  // Helper para obtener clases CSS de chips de categoría
+  function getCategoriaChipClasses(value: EmailFilterCategoria) {
+    const isActive = filterCategoria === value;
+    const baseClasses = "estado-chip";
+    
+    if (value === "todas") {
+      // El chip "Todas" usa el estilo estándar de estado chip
+      return isActive ? `${baseClasses} estado-chip-active` : `${baseClasses} estado-chip-faded`;
+    }
+    
+    // Si está activo, usar color específico, si no, usar gris uniforme
+    const activeClasses = {
+      "cliente": "chip-categoria-cliente-active",
+      "lead": "chip-categoria-lead-active",
+      "interno": "chip-categoria-interno-active",
+      "spam": "chip-categoria-spam-active"
+    };
+    
+    const inactiveClasses = {
+      "cliente": "chip-categoria-cliente",
+      "lead": "chip-categoria-lead",
+      "interno": "chip-categoria-interno",
+      "spam": "chip-categoria-spam"
+    };
+    
+    return `${baseClasses} ${isActive ? activeClasses[value] : inactiveClasses[value]}`;
+  }
+
+  // Helper para obtener clases CSS de chips de prioridad
+  function getPrioridadChipClasses(value: EmailFilterPriority) {
+    const isActive = filterPrioridad === value;
+    const baseClasses = "estado-chip";
+    
+    if (value === "todas") {
+      // El chip "Todas" usa el estilo estándar de estado chip
+      return isActive ? `${baseClasses} estado-chip-active` : `${baseClasses} estado-chip-faded`;
+    }
+    
+    // Si está activo, usar color específico, si no, usar gris uniforme
+    const activeClasses = {
+      "alta": "chip-prioridad-alta-active",
+      "media": "chip-prioridad-media-active",
+      "baja": "chip-prioridad-baja-active"
+    };
+    
+    const inactiveClasses = {
+      "alta": "chip-prioridad-alta",
+      "media": "chip-prioridad-media",
+      "baja": "chip-prioridad-baja"
+    };
+    
+    return `${baseClasses} ${isActive ? activeClasses[value] : inactiveClasses[value]}`;
+  }
+
   // Render
   return (
     <div className="space-y-4">
@@ -408,57 +534,206 @@ export default function EmailTable() {
       </div>
 
       {/* Barra de herramientas: búsqueda + filtros */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <SearchBar
-          value={query}
-          onChange={(val) => {
-            setQuery(val);
-            resetPaging();
-          }}
-          placeholder="Buscar por remitente o asunto..."
-          ariaLabel="Buscar emails"
-        />
-
-        <div className="flex items-center gap-2">
-          {/* Filtro estado */}
-          <label className="text-sm text-[color:var(--color-text-secondary)]">
-            Estado
-          </label>
-          <select
-            value={filterEstado}
-            onChange={(e) => {
-              setFilterEstado(e.target.value as typeof filterEstado);
+      <div className="flex flex-col gap-3">
+        {/* Fila principal: búsqueda + chips de estado */}
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <SearchBar
+            value={query}
+            onChange={(val) => {
+              setQuery(val);
               resetPaging();
             }}
-            className="px-2 py-2 rounded-md border border-[color:var(--color-border-light)] bg-[color:var(--color-bg-card)] text-sm"
-            aria-label="Filtrar por estado"
-          >
-            <option value="todos">Todos</option>
-            <option value="procesado">Procesado</option>
-            <option value="sin-procesar">Sin procesar</option>
-            <option value="aprobado">Aprobado</option>
-          </select>
+            placeholder="Buscar por remitente o asunto..."
+            ariaLabel="Buscar emails"
+          />
 
-          {/* Filtro categoría */}
-          <label className="text-sm text-[color:var(--color-text-secondary)] ml-2">
-            Categoría
-          </label>
-          <select
-            value={filterCategoria}
-            onChange={(e) => {
-              setFilterCategoria(e.target.value as typeof filterCategoria);
-              resetPaging();
-            }}
-            className="px-2 py-2 rounded-md border border-[color:var(--color-border-light)] bg-[color:var(--color-bg-card)] text-sm"
-            aria-label="Filtrar por categoría"
-          >
-            <option value="todas">Todas</option>
-            <option value="cliente">Cliente</option>
-            <option value="lead">Lead</option>
-            <option value="interno">Interno</option>
-            <option value="spam">Spam</option>
-          </select>
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-end md:gap-3">
+            {/* Chips de estado con contadores */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                className={`estado-chip ${
+                  filterEstado === "aprobado"
+                    ? "estado-chip-aprobado-active"
+                    : "estado-chip-aprobado"
+                } ${
+                  filterEstado !== "todos" && filterEstado !== "aprobado"
+                    ? "estado-chip-faded"
+                    : ""
+                }`}
+                onClick={() => {
+                  setFilterEstado((prev) =>
+                    prev === "aprobado" ? "todos" : "aprobado",
+                  );
+                  // Al cambiar de estado, reiniciar filtros IA a "todas"
+                  setFilterCategoria("todas");
+                  setFilterPrioridad("todas");
+                  setFilterAprobacion("todos");
+                  resetPaging();
+                }}
+                aria-pressed={filterEstado === "aprobado"}
+              >
+                <span className="estado-chip-dot estado-chip-dot-aprobado" />
+                <span>Aprobados</span>
+                <span className="estado-chip-count">
+                  {estadoCounts.aprobados}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className={`estado-chip ${
+                  filterEstado === "procesado"
+                    ? "estado-chip-procesado-active"
+                    : "estado-chip-procesado"
+                } ${
+                  filterEstado !== "todos" && filterEstado !== "procesado"
+                    ? "estado-chip-faded"
+                    : ""
+                }`}
+                onClick={() => {
+                  setFilterEstado((prev) =>
+                    prev === "procesado" ? "todos" : "procesado",
+                  );
+                  setFilterCategoria("todas");
+                  setFilterPrioridad("todas");
+                  setFilterAprobacion("todos");
+                  resetPaging();
+                }}
+                aria-pressed={filterEstado === "procesado"}
+              >
+                <span className="estado-chip-dot estado-chip-dot-procesado" />
+                <span>Procesados</span>
+                <span className="estado-chip-count">
+                  {estadoCounts.procesados}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className={`estado-chip ${
+                  filterEstado === "sin-procesar"
+                    ? "estado-chip-sin-procesar-active"
+                    : "estado-chip-sin-procesar"
+                } ${
+                  filterEstado !== "todos" && filterEstado !== "sin-procesar"
+                    ? "estado-chip-faded"
+                    : ""
+                }`}
+                onClick={() => {
+                  setFilterEstado((prev) =>
+                    prev === "sin-procesar" ? "todos" : "sin-procesar",
+                  );
+                  setFilterCategoria("todas");
+                  setFilterPrioridad("todas");
+                  setFilterAprobacion("todos");
+                  resetPaging();
+                }}
+                aria-pressed={filterEstado === "sin-procesar"}
+              >
+                <span className="estado-chip-dot estado-chip-dot-sin-procesar" />
+                <span>Sin procesar</span>
+                <span className="estado-chip-count">
+                  {estadoCounts.sinProcesar}
+                </span>
+              </button>
+            </div>
+          </div>
         </div>
+
+        {/* Filtros contextuales de IA (categoría / prioridad) - Bloque cohesivo */}
+        {showIAFilters && (
+          <div className="bg-[color:var(--color-bg-muted)] border border-[color:var(--color-border-light)] rounded-lg p-4 animate-slide-up">
+            <div className="flex flex-col gap-3">
+
+              {/* Grid responsive para filtros IA */}
+              <div className="flex flex-col gap-3 md:grid md:grid-cols-2 md:gap-4">
+                {/* Columna de categoría */}
+                <div className="flex flex-col gap-2">
+                  <span className="text-xs font-medium text-[color:var(--color-text-secondary)] uppercase tracking-wide">
+                    Categoría:
+                  </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+ 
+
+                    <button
+                      type="button"
+                      className={getCategoriaChipClasses("cliente")}
+                      onClick={() => handleCategoriaChipClick("cliente")}
+                      aria-pressed={filterCategoria === "cliente"}
+                    >
+                      <span>Cliente</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={getCategoriaChipClasses("lead")}
+                      onClick={() => handleCategoriaChipClick("lead")}
+                      aria-pressed={filterCategoria === "lead"}
+                    >
+                      <span>Lead</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={getCategoriaChipClasses("interno")}
+                      onClick={() => handleCategoriaChipClick("interno")}
+                      aria-pressed={filterCategoria === "interno"}
+                    >
+                      <span>Interno</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={getCategoriaChipClasses("spam")}
+                      onClick={() => handleCategoriaChipClick("spam")}
+                      aria-pressed={filterCategoria === "spam"}
+                    >
+                      <span>Spam</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Columna de prioridad */}
+                <div className="flex flex-col gap-2">
+                  <span className="text-xs font-medium text-[color:var(--color-text-secondary)] uppercase tracking-wide">
+                    Prioridad:
+                  </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+
+
+                    <button
+                      type="button"
+                      className={getPrioridadChipClasses("alta")}
+                      onClick={() => handlePrioridadChipClick("alta")}
+                      aria-pressed={filterPrioridad === "alta"}
+                    >
+                      <span>Alta</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={getPrioridadChipClasses("media")}
+                      onClick={() => handlePrioridadChipClick("media")}
+                      aria-pressed={filterPrioridad === "media"}
+                    >
+                      <span>Media</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={getPrioridadChipClasses("baja")}
+                      onClick={() => handlePrioridadChipClick("baja")}
+                      aria-pressed={filterPrioridad === "baja"}
+                    >
+                      <span>Baja</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Tabla / Cards responsive */}
@@ -512,6 +787,7 @@ export default function EmailTable() {
                   </th>
                   <th className="py-3 px-2">Remitente</th>
                   <th className="py-3 px-2">Asunto</th>
+                  <th className="py-3 px-2 min-w-[300px]">Vista previa</th>
                   <th
                     className="py-3 px-2 cursor-pointer select-none"
                     onClick={toggleSortByDate}
@@ -532,83 +808,88 @@ export default function EmailTable() {
                 {pageData.map((e) => {
                   const isNew = isNewEmail(e.createdAt);
                   const isRejected = isRecentlyRejected(e);
-                  
+
                   return (
-                  <tr
-                    key={e.id}
-                    className={
-                      isRejected
-                        ? "email-row-rechazado cursor-pointer"
-                        : isNew
-                        ? "email-row-nuevo cursor-pointer"
-                        : "hover:bg-[color:var(--color-bg-hover)] cursor-pointer"
-                    }
-                    onClick={() => onRowClick(e.id)}
-                  >
-                    <td
-                      className="py-3 pl-4 pr-2"
-                      onClick={(ev) => ev.stopPropagation()}
+                    <tr
+                      key={e.id}
+                      className={
+                        isRejected
+                          ? "email-row-rechazado cursor-pointer"
+                          : isNew
+                          ? "email-row-nuevo cursor-pointer"
+                          : "hover:bg-[color:var(--color-bg-hover)] cursor-pointer"
+                      }
+                      onClick={() => onRowClick(e.id)}
                     >
-                      <input
-                        type="checkbox"
-                        aria-label={`Seleccionar ${e.subject}`}
-                        checked={!!selected[e.id]}
-                        onChange={() => toggleSelect(e.id)}
-                      />
-                    </td>
-                    <td className="py-3 px-2 whitespace-nowrap">{e.from}</td>
-                    <td className="py-3 px-2">
-                      <div className="truncate-2-lines max-w-[480px]">
-                        {e.subject}
-                      </div>
-                    </td>
-                    <td className="py-3 px-2 whitespace-nowrap">
-                      {formatRelative(e.receivedAt.toISOString())}
-                    </td>
-                    <td className="py-3 px-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {/* Badge "Rechazado" para emails rechazados recientemente */}
-                        {isRejected && (
-                          <span className="badge-email-rechazado inline-flex items-center px-2 py-1 rounded text-xs">
-                            Rechazado
-                          </span>
-                        )}
-                        {/* Badge "Nuevo" para emails importados recientemente */}
-                        {!isRejected && isNew && (
-                          <span className="badge-email-nuevo inline-flex items-center px-2 py-1 rounded text-xs">
-                            Nuevo
-                          </span>
-                        )}
-                        {/* En procesamiento */}
-                        {processingIds.includes(e.id) && (
-                          <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-[color:var(--color-bg-muted)] text-[color:var(--color-text-primary)]">
-                            <span
-                              className="animate-spin rounded-full h-3 w-3 border-b-2 border-[color:var(--color-primary-500)] mr-1"
-                              aria-hidden
-                            ></span>
-                            En procesamiento
-                          </span>
-                        )}
-                        {/* Badge de estado procesado/sin procesar */}
-                        {e.processedAt !== null ? (
-                          <span className="badge-procesado inline-flex items-center px-2 py-1 rounded text-xs">
-                            Procesado
-                          </span>
-                        ) : (
-                          <span className="badge-sin-procesar inline-flex items-center px-2 py-1 rounded text-xs">
-                            Sin procesar
-                          </span>
-                        )}
-                        {/* Badge de aprobación */}
-                        {e.processedAt !== null && e.approvedAt !== null && (
-                          <span className="badge-aprobado inline-flex items-center px-2 py-1 rounded text-xs">
-                            <Check className="w-3 h-3 mr-1" aria-hidden />
-                            Aprobado
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
+                      <td
+                        className="py-3 pl-4 pr-2"
+                        onClick={(ev) => ev.stopPropagation()}
+                      >
+                        <input
+                          type="checkbox"
+                          aria-label={`Seleccionar ${e.subject}`}
+                          checked={!!selected[e.id]}
+                          onChange={() => toggleSelect(e.id)}
+                        />
+                      </td>
+                      <td className="py-3 px-2 whitespace-nowrap">{e.from}</td>
+                      <td className="py-3 px-2">
+                        <div className="truncate-2-lines max-w-[480px]">
+                          {e.subject}
+                        </div>
+                      </td>
+                      <td className="py-3 px-2">
+                        <div className="email-preview max-w-[300px]">
+                          {truncateText(cleanHtmlText(e.body || ""), 100)}
+                        </div>
+                      </td>
+                      <td className="py-3 px-2 whitespace-nowrap">
+                        {formatRelative(e.receivedAt.toISOString())}
+                      </td>
+                      <td className="py-3 px-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {/* Badge "Rechazado" para emails rechazados recientemente */}
+                          {isRejected && (
+                            <span className="badge-email-rechazado inline-flex items-center px-2 py-1 rounded text-xs">
+                              Rechazado
+                            </span>
+                          )}
+                          {/* Badge "Nuevo" para emails importados recientemente */}
+                          {!isRejected && isNew && (
+                            <span className="badge-email-nuevo inline-flex items-center px-2 py-1 rounded text-xs">
+                              Nuevo
+                            </span>
+                          )}
+                          {/* En procesamiento */}
+                          {processingIds.includes(e.id) && (
+                            <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-[color:var(--color-bg-muted)] text-[color:var(--color-text-primary)]">
+                              <span
+                                className="animate-spin rounded-full h-3 w-3 border-b-2 border-[color:var(--color-primary-500)] mr-1"
+                                aria-hidden
+                              ></span>
+                              En procesamiento
+                            </span>
+                          )}
+                          {/* Badge de estado procesado/sin procesar */}
+                          {e.processedAt !== null ? (
+                            <span className="badge-procesado inline-flex items-center px-2 py-1 rounded text-xs">
+                              Procesado
+                            </span>
+                          ) : (
+                            <span className="badge-sin-procesar inline-flex items-center px-2 py-1 rounded text-xs">
+                              Sin procesar
+                            </span>
+                          )}
+                          {/* Badge de aprobación */}
+                          {e.processedAt !== null && e.approvedAt !== null && (
+                            <span className="badge-aprobado inline-flex items-center px-2 py-1 rounded text-xs">
+                              <Check className="w-3 h-3 mr-1" aria-hidden />
+                              Aprobado
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
                   );
                 })}
               </tbody>
@@ -619,76 +900,82 @@ export default function EmailTable() {
               {pageData.map((e) => {
                 const isNew = isNewEmail(e.createdAt);
                 const isRejected = isRecentlyRejected(e);
-                
+
                 return (
-                <div
-                  key={e.id}
-                  className={`email-card mb-2 ${
-                    isRejected
-                      ? "email-card-rechazado"
-                      : isNew
-                      ? "email-card-nuevo"
-                      : ""
-                  }`}
-                  onClick={() => onRowClick(e.id)}
-                  role="button"
-                  aria-label={`Abrir ${e.subject}`}
-                >
-                  <div className="email-card-header">
-                    <div className="email-card-from">{e.from}</div>
-                    <div className="email-card-date">
-                      {formatRelative(e.receivedAt.toISOString())}
+                  <div
+                    key={e.id}
+                    className={`email-card mb-2 ${
+                      isRejected
+                        ? "email-card-rechazado"
+                        : isNew
+                        ? "email-card-nuevo"
+                        : ""
+                    }`}
+                    onClick={() => onRowClick(e.id)}
+                    role="button"
+                    aria-label={`Abrir ${e.subject}`}
+                  >
+                    <div className="email-card-header">
+                      <div className="email-card-from">{e.from}</div>
+                      <div className="email-card-date">
+                        {formatRelative(e.receivedAt.toISOString())}
+                      </div>
+                    </div>
+                    <div className="email-card-subject">{e.subject}</div>
+                    
+                    {/* Vista previa para móvil */}
+                    <div className="email-preview text-xs text-[color:var(--color-text-muted)] mt-1 line-clamp-2">
+                      {truncateText(cleanHtmlText(e.body || ""), 80)}
+                    </div>
+                    
+                    <div className="email-card-footer">
+                      {/* Badge "Rechazado" para emails rechazados recientemente */}
+                      {isRejected && (
+                        <span className="badge-email-rechazado inline-flex items-center px-2 py-1 rounded text-xs">
+                          Rechazado
+                        </span>
+                      )}
+                      {/* Badge "Nuevo" para emails importados recientemente */}
+                      {!isRejected && isNew && (
+                        <span className="badge-email-nuevo inline-flex items-center px-2 py-1 rounded text-xs">
+                          Nuevo
+                        </span>
+                      )}
+                      {/* Badge de estado procesado/sin procesar */}
+                      {e.processedAt !== null ? (
+                        <span className="badge-procesado inline-flex items-center px-2 py-1 rounded text-xs">
+                          Procesado
+                        </span>
+                      ) : (
+                        <span className="badge-sin-procesar inline-flex items-center px-2 py-1 rounded text-xs">
+                          Sin procesar
+                        </span>
+                      )}
+                      {/* Badge de aprobación */}
+                      {e.processedAt !== null && e.approvedAt !== null && (
+                        <span className="badge-aprobado inline-flex items-center px-2 py-1 rounded text-xs">
+                          <Check className="w-3 h-3 mr-1" aria-hidden />
+                          Aprobado
+                        </span>
+                      )}
+                      {/* Badge de categoría si existe */}
+                      {e.metadata?.category ? (
+                        <span
+                          className={`inline-flex items-center px-2 py-1 rounded text-xs ${
+                            e.metadata.category === "cliente"
+                              ? "badge-categoria-cliente"
+                              : e.metadata.category === "lead"
+                              ? "badge-categoria-lead"
+                              : e.metadata.category === "interno"
+                              ? "badge-categoria-interno"
+                              : "badge-categoria-spam"
+                          }`}
+                        >
+                          {e.metadata.category}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
-                  <div className="email-card-subject">{e.subject}</div>
-                  <div className="email-card-footer">
-                    {/* Badge "Rechazado" para emails rechazados recientemente */}
-                    {isRejected && (
-                      <span className="badge-email-rechazado inline-flex items-center px-2 py-1 rounded text-xs">
-                        Rechazado
-                      </span>
-                    )}
-                    {/* Badge "Nuevo" para emails importados recientemente */}
-                    {!isRejected && isNew && (
-                      <span className="badge-email-nuevo inline-flex items-center px-2 py-1 rounded text-xs">
-                        Nuevo
-                      </span>
-                    )}
-                    {/* Badge de estado procesado/sin procesar */}
-                    {e.processedAt !== null ? (
-                      <span className="badge-procesado inline-flex items-center px-2 py-1 rounded text-xs">
-                        Procesado
-                      </span>
-                    ) : (
-                      <span className="badge-sin-procesar inline-flex items-center px-2 py-1 rounded text-xs">
-                        Sin procesar
-                      </span>
-                    )}
-                    {/* Badge de aprobación */}
-                    {e.processedAt !== null && e.approvedAt !== null && (
-                      <span className="badge-aprobado inline-flex items-center px-2 py-1 rounded text-xs">
-                        <Check className="w-3 h-3 mr-1" aria-hidden />
-                        Aprobado
-                      </span>
-                    )}
-                    {/* Badge de categoría si existe */}
-                    {e.metadata?.category ? (
-                      <span
-                        className={`inline-flex items-center px-2 py-1 rounded text-xs ${
-                          e.metadata.category === "cliente"
-                            ? "badge-categoria-cliente"
-                            : e.metadata.category === "lead"
-                            ? "badge-categoria-lead"
-                            : e.metadata.category === "interno"
-                            ? "badge-categoria-interno"
-                            : "badge-categoria-spam"
-                        }`}
-                      >
-                        {e.metadata.category}
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
                 );
               })}
             </div>

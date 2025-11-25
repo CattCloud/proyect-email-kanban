@@ -169,19 +169,28 @@ export default function KanbanBoard() {
 
   return (
     <div className="relative">
-      {/* Toast de estado de guardado / error del tablero (más visible) */}
-      {(dragUpdating || dragError) && (
+      {/* Overlay de carga que bloquea toda la página */}
+      {dragUpdating && (
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-white rounded-lg shadow-xl p-6 flex flex-col items-center gap-4 min-w-[280px]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[color:var(--color-primary-500)]"></div>
+            <div className="text-center">
+              <p className="font-medium text-[color:var(--color-text-primary)]">
+                Actualizando tarea...
+              </p>
+              <p className="text-sm text-[color:var(--color-text-secondary)] mt-1">
+                Por favor espera mientras guardamos los cambios
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast de error (solo cuando no está actualizando) */}
+      {dragError && !dragUpdating && (
         <div className="fixed bottom-4 right-4 z-40">
-          <div
-            className={`px-3 py-2 rounded-md shadow-md text-xs flex items-center gap-2 ${
-              dragError
-                ? "bg-[color:var(--color-danger-50)] text-[color:var(--color-danger-700)] border border-[color:var(--color-danger-200)]"
-                : "bg-[color:var(--color-primary-50)] text-[color:var(--color-primary-800)] border border-[color:var(--color-primary-200)]"
-            }`}
-          >
-            {dragError
-              ? dragError
-              : "Guardando cambios del tablero..."}
+          <div className="px-3 py-2 rounded-md shadow-md text-xs flex items-center gap-2 bg-[color:var(--color-danger-50)] text-[color:var(--color-danger-700)] border border-[color:var(--color-danger-200)]">
+            {dragError}
           </div>
         </div>
       )}

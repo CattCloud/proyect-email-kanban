@@ -43,6 +43,7 @@ export interface ReviewEmailItem {
   metadata: ReviewMetadata | null;
   rejectionReason?: string | null;
   previousAIResult?: unknown | null;
+  rejectedAt?: string | Date | null;
 }
 
 // Función para determinar si un email fue rechazado recientemente (en los últimos 5 minutos)
@@ -51,19 +52,24 @@ function isRecentlyRejected(email: ReviewEmailItem): boolean {
   // 1. Tiene rejectionReason (fue rechazado)
   // 2. processedAt es null (fue revertido a estado no procesado)
   // 3. previousAIResult no es null (tiene snapshot del análisis descartado)
-  if (!email.rejectionReason || email.processedAt !== null || !email.previousAIResult) {
+  // 4. rejectedAt tiene una marca de tiempo válida
+  if (
+    !email.rejectionReason ||
+    email.processedAt !== null ||
+    !email.previousAIResult ||
+    !email.rejectedAt
+  ) {
     return false;
   }
-  
-  // Verificar si el rechazo fue reciente (últimos 5 minutos)
-  // Como no tenemos un campo rejectedAt, usamos createdAt como aproximación temporal
-  const now = new Date().getTime();
-  const created = new Date(email.createdAt).getTime();
+
+  const now = Date.now();
+  const rejectedAtTs = new Date(email.rejectedAt).getTime();
+  if (Number.isNaN(rejectedAtTs)) return false;
+
   const fiveMinutesInMs = 5 * 60 * 1000;
-  
-  // Si el email fue creado hace más de 5 minutos, no puede ser un rechazo reciente
-  // Esta es una aproximación: asumimos que los rechazos ocurren poco después de la importación
-  return now - created < fiveMinutesInMs;
+
+  // Solo se considera "reciente" si el rechazo fue en los últimos 5 minutos
+  return now - rejectedAtTs < fiveMinutesInMs;
 }
 
 // Formateo de fecha legible en español
