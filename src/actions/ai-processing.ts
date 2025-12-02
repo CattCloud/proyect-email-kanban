@@ -103,6 +103,11 @@ interface SnapshotTask {
   status: string;
 }
 
+interface EmailUpdateWithReprocessCount {
+  processedAt: Date;
+  reprocessCount: number;
+}
+
 interface SnapshotMetadata {
   category: string | null;
   priority: string | null;
@@ -303,11 +308,16 @@ export async function processEmailsWithAI(
         continue;
       }
 
+      // Extender temporalmente el email para acceder a reprocessCount
+      const emailWithReprocessCount = email as typeof email & { reprocessCount?: number };
+      
       // Construir EmailInput extendido con reprocessCount para el cálculo
       const baseInput = inputById[emailId] ?? mapEmailToAIInput(email);
+      const reprocessCount = emailWithReprocessCount.reprocessCount ?? 0;
+      
       const extendedInput: EmailInput & { reprocessCount: number } = {
         ...baseInput,
-        reprocessCount: email.reprocessCount ?? 0,
+        reprocessCount,
       };
 
       const confidence = calculateConfidenceLevel(extendedInput, analysis, {
@@ -335,7 +345,8 @@ export async function processEmailsWithAI(
             email.previousAIResult !== null ||
             email.rejectedAt !== null;
 
-          const currentReprocessCount = email.reprocessCount ?? 0;
+          // Obtener reprocessCount de forma segura
+          const currentReprocessCount = emailWithReprocessCount.reprocessCount ?? 0;
 
           const newReprocessCount = isReprocess
             ? currentReprocessCount + 1
@@ -347,7 +358,7 @@ export async function processEmailsWithAI(
             data: {
               processedAt: new Date(),
               reprocessCount: newReprocessCount,
-            },
+            } as EmailUpdateWithReprocessCount, // Campo existe en BD pero no en la interfaz TS actual
           });
         });
 
