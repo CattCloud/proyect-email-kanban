@@ -308,12 +308,15 @@ export async function processEmailsWithAI(
         continue;
       }
 
-      // Extender temporalmente el email para acceder a reprocessCount
-      const emailWithReprocessCount = email as typeof email & { reprocessCount?: number };
+      // Extender temporalmente el email para acceder a campos faltantes en la interfaz TS
+      const emailExtended = email as typeof email & { 
+        reprocessCount?: number; 
+        rejectedAt?: Date | null; 
+      };
       
       // Construir EmailInput extendido con reprocessCount para el cálculo
       const baseInput = inputById[emailId] ?? mapEmailToAIInput(email);
-      const reprocessCount = emailWithReprocessCount.reprocessCount ?? 0;
+      const reprocessCount = emailExtended.reprocessCount ?? 0;
       
       const extendedInput: EmailInput & { reprocessCount: number } = {
         ...baseInput,
@@ -343,10 +346,10 @@ export async function processEmailsWithAI(
           const isReprocess =
             email.rejectionReason !== null ||
             email.previousAIResult !== null ||
-            email.rejectedAt !== null;
+            emailExtended.rejectedAt !== null;
 
           // Obtener reprocessCount de forma segura
-          const currentReprocessCount = emailWithReprocessCount.reprocessCount ?? 0;
+          const currentReprocessCount = emailExtended.reprocessCount ?? 0;
 
           const newReprocessCount = isReprocess
             ? currentReprocessCount + 1
