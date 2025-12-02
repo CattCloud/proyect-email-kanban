@@ -13,6 +13,8 @@ import {
   type GenericActionResult,
 } from "@/actions/ai-processing";
 import { RejectReasonModal } from "@/components/processing/RejectReasonModal";
+import { ConfidenceIndicator } from "@/components/processing/ConfidenceIndicator";
+import type { ConfidenceSignals } from "@/types/ai";
 
 export interface ReviewTask {
   id: string;
@@ -44,6 +46,18 @@ export interface ReviewEmailItem {
   rejectionReason?: string | null;
   previousAIResult?: unknown | null;
   rejectedAt?: string | Date | null;
+  /**
+   * Score de confianza IA asociado al email (si existe).
+   * Mapeo directo de AIConfidenceScore:
+   * - overallScore: 0-100
+   * - confidenceReason: explicación legible
+   * - breakdown: señales individuales (opcional, puede ser null)
+   */
+  confidenceScore?: {
+    overallScore: number;
+    confidenceReason: string;
+    breakdown?: ConfidenceSignals | null;
+  } | null;
 }
 
 // Función para determinar si un email fue rechazado recientemente (en los últimos 5 minutos)
@@ -132,6 +146,7 @@ function truncateText(text: string, length = 420): string {
  * - Solo una expandida a la vez
  * - Acciones Aceptar/Rechazar en el panel expandido
  * - Enlace a detalle del email separado del trigger de despliegue
+ * - Extensión (Nivel de Confianza IA): muestra indicador de confianza por email.
  */
 export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] }) {
   const router = useRouter();
@@ -207,6 +222,7 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
     try {
       const res = (await confirmProcessingResults(id)) as GenericActionResult;
       if (!res.success) {
+        // eslint-disable-next-line no-alert
         alert(res.error ?? "Error al confirmar resultados IA");
         return;
       }
@@ -216,6 +232,7 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error(e);
+      // eslint-disable-next-line no-alert
       alert("Fallo al confirmar resultados");
     } finally {
       setBusy(id, null);
@@ -237,6 +254,7 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
         reason
       )) as GenericActionResult;
       if (!res.success) {
+        // eslint-disable-next-line no-alert
         alert(res.error ?? "Error al rechazar resultados IA");
         return;
       }
@@ -248,6 +266,7 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error(e);
+      // eslint-disable-next-line no-alert
       alert("Fallo al rechazar resultados");
     } finally {
       setBusy(id, null);
@@ -350,6 +369,16 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
             const busyReject = busyById[email.id] === "reject";
             const isRejected = isRecentlyRejected(email);
 
+            // Confianza IA: normalizar tipo por seguridad
+            const rawConfidence = (email as ReviewEmailItem).confidenceScore;
+            const confidence = rawConfidence
+              ? {
+                overallScore: rawConfidence.overallScore,
+                confidenceReason: rawConfidence.confidenceReason,
+                breakdown: rawConfidence.breakdown ?? undefined,
+              }
+              : null;
+
             return (
               <article
                 key={email.id}
@@ -382,6 +411,7 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
                       <span className="font-medium">De:</span>
                       <span>{email.from}</span>
                     </div>
+
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <Link href={`/emails/${email.id}`} className="hide-mobile">
@@ -426,8 +456,29 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
                         {truncateText(email.body, 900)}
                       </div>
                     </div>
+                    {/* Nivel de confianza IA (separado) */}
+                    <div className="mb-3">
+                      <div className="text-[color:var(--color-primary-600)] font-medium text-sm mb-2">
+                        Nivel de confianza IA
+                      </div>
+                      <div className="border border-[color:var(--color-border-light)] rounded-md p-4 bg-[color:var(--color-bg-alt)]">
+                        {confidence ? (
+                          <ConfidenceIndicator
+                            score={confidence.overallScore}
+                            reason={confidence.confidenceReason}
+                            breakdown={confidence.breakdown}
+                            showDetails
+                          />
+                        ) : (
+                          <p className="text-[10px] text-[color:var(--color-text-muted)]">
+                            Este email aún no tiene datos de nivel de confianza IA
+                            (procesado antes de activar el sistema de confianza o sin score asociado).
+                          </p>
+                        )}
+                      </div>
+                    </div>
 
-                    {/* Análisis IA (metadata) */}
+                    {/* Análisis IA + Nivel de Confianza */}
                     <div className="mb-3">
                       <div className="text-[color:var(--color-primary-600)] font-medium text-sm mb-2">
                         Análisis IA
@@ -441,15 +492,14 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
                             <div className="mt-1">
                               {md?.category ? (
                                 <span
-                                  className={`inline-flex items-center px-2 py-1 rounded text-xs ${
-                                    md.category === "cliente"
+                                  className={`inline-flex items-center px-2 py-1 rounded text-xs ${md.category === "cliente"
                                       ? "badge-categoria-cliente"
                                       : md.category === "lead"
-                                      ? "badge-categoria-lead"
-                                      : md.category === "interno"
-                                      ? "badge-categoria-interno"
-                                      : "badge-categoria-spam"
-                                  }`}
+                                        ? "badge-categoria-lead"
+                                        : md.category === "interno"
+                                          ? "badge-categoria-interno"
+                                          : "badge-categoria-spam"
+                                    }`}
                                 >
                                   {md.category}
                                 </span>
@@ -467,13 +517,12 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
                             <div className="mt-1">
                               {md?.priority ? (
                                 <span
-                                  className={`inline-flex items-center px-2 py-1 rounded text-xs ${
-                                    md.priority === "alta"
+                                  className={`inline-flex items-center px-2 py-1 rounded text-xs ${md.priority === "alta"
                                       ? "badge-prioridad-alta"
                                       : md.priority === "media"
-                                      ? "badge-prioridad-media"
-                                      : "badge-prioridad-baja"
-                                  }`}
+                                        ? "badge-prioridad-media"
+                                        : "badge-prioridad-baja"
+                                    }`}
                                 >
                                   {md.priority}
                                 </span>
@@ -509,6 +558,29 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
                             </div>
                           </div>
                         </div>
+
+
+                        {/* Indicador de nivel de confianza IA 
+                                                <div className="mt-3">
+                          <div className="text-xs font-semibold text-[color:var(--color-text-secondary)] mb-1">
+                            Nivel de confianza IA
+                          </div>
+                          {confidence ? (
+                            <ConfidenceIndicator
+                              score={confidence.overallScore}
+                              reason={confidence.confidenceReason}
+                              breakdown={confidence.breakdown}
+                              showDetails
+                            />
+                          ) : (
+                            <p className="text-[10px] text-[color:var(--color-text-muted)]">
+                              Este email aún no tiene datos de nivel de confianza IA
+                              (procesado antes de activar el sistema de confianza o sin score asociado).
+                            </p>
+                          )}
+                        </div>
+                        */}
+
                       </div>
                     </div>
 
@@ -534,19 +606,19 @@ export default function ReviewAccordion({ items }: { items: ReviewEmailItem[] })
                                   {t.description}
                                 </div>
                                 <span
-                                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                                    t.status === "todo"
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${t.status === "todo"
                                       ? "bg-yellow-50 text-yellow-600"
                                       : t.status === "doing"
-                                      ? "bg-blue-50 text-blue-700"
-                                      : "bg-green-50 text-green-700"
-                                  }`}
+
+                                        ? "bg-blue-50 text-blue-700"
+                                        : "bg-green-50 text-green-700"
+                                    }`}
                                 >
                                   {t.status === "todo"
                                     ? "Por hacer"
                                     : t.status === "doing"
-                                    ? "En progreso"
-                                    : "Completado"}
+                                      ? "En progreso"
+                                      : "Completado"}
                                 </span>
                               </div>
 

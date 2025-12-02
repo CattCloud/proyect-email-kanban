@@ -1,0 +1,82 @@
+[
+  {
+    "id": "email-021",
+    "email": "soporte.critico@empresa-grande.com",
+    "received_at": "2025-11-25T18:45:00Z",
+    "subject": "Sistema de facturación completamente fuera de línea",
+    "body": "URGENTE: Nuestro sistema de facturación ha fallado desde hace 4 horas. Los clientes no pueden generar facturas y esto está afectando las ventas del día. Necesitamos una solución inmediata. El equipo técnico de la empresa no puede identificar el problema. Contacten al director de IT inmediatamente."
+  },
+  {
+    "id": "email-022",
+    "email": "marketing@startup-creciente.com",
+    "received_at": "2025-11-25T13:20:00Z",
+    "subject": "Propuesta de campaña digital - Presupuesto 2024",
+    "body": "Buenos días, somos una startup en crecimiento y necesitamos desarrollar una estrategia de marketing digital completa para el 2024. Buscamos una propuesta que incluya redes sociales, Google Ads, y email marketing. Nuestro presupuesto es de $15,000 para todo el año. ¿Podrían preparar una propuesta detallada?"
+  },
+  {
+    "id": "email-023",
+    "email": "admin@empresa-interna.com",
+    "received_at": "2025-11-25T10:15:00Z",
+    "subject": "Backup automático del sistema - Completado exitosamente",
+    "body": "El backup automático nocturno del sistema se completó exitosamente a las 2:30 AM. Se respaldaron 2.4 TB de datos sin errores. Los archivos se encuentran almacenados en la ubicación segura. El próximo backup programado es para mañana a la misma hora. Todo funcionando normalmente."
+  },
+  {
+    "id": "email-024",
+    "email": "promociones@inmobiliariasp.com",
+    "received_at": "2025-11-24T16:00:00Z",
+    "subject": "Mega Oferta: Departamentos con 50% de descuento - Solo hoy",
+    "body": "¡ÚLTIMA OPORTUNIDAD! Departamentos en las mejores zonas de la ciudad con 50% de descuento. Oferta limitada por tiempo determinado. No se quedará sin el suyo. Contacte YA y aproveche esta increíble oferta. Nuestros asesores están disponibles 24/7 para atenderle. ¡APROVECHE ESTA OPORTUNIDAD ÚNICA!"
+  },
+  {
+    "id": "email-025",
+    "email": "rechazo-test@empresa-cliente.com",
+    "received_at": "2025-11-24T14:30:00Z",
+    "subject": "Rechazo anterior - Email mal categorizado",
+    "body": "Estimados, este email fue rechazado anteriormente por categorización incorrecta. El sistema lo marcó como spam cuando claramente es una comunicación comercial válida. Por favor, rectifiquen la categorización y procesen adecuadamente. Necesitamos que este mensaje llegue al área de ventas correctamente.",
+    "rejectionReason": "Categoría incorrecta",
+    "previousAIResult": {
+      "email_id": "email-025",
+      "category": "spam",
+      "priority": "baja",
+      "summary": "Email promocional sospechoso",
+      "contact_name": "Cliente Empresa",
+      "tasks": []
+    }
+  },
+  {
+    "id": "email-026",
+    "email": "urgente@infrastructure-solutions.com",
+    "received_at": "2025-11-24T11:45:00Z",
+    "subject": "FALLA CRÍTICA: Base de datos principal corrupta",
+    "body": "EMERGENCIA: La base de datos principal se encuentra corrupta y afecta todos los sistemas críticos. Los usuarios no pueden acceder a sus cuentas desde hace 2 horas. Es necesario restaurar desde backup más reciente inmediatamente. Contacten al equipo de DBAs urgentemente. Hay clientes perdiendo transacciones en tiempo real."
+  },
+  {
+    "id": "email-027",
+    "email": "carlos.rechazo@empresa-cliente.com",
+    "received_at": "2025-11-23T17:30:00Z",
+    "subject": "Rechazo anterior - Tareas inexistentes extraídas",
+    "body": "Hola, les escribo para confirmar la reunión del viernes pasado. Fue muy productiva y estamos satisfechos con los resultados del proyecto. Agradecemos su profesionalismo y esperamos continuar trabajando juntos. No hay tareas pendientes en este momento, solo queríamos expresar nuestra satisfacción con el trabajo realizado.",
+    "rejectionReason": "Tareas mal extraídas",
+    "previousAIResult": {
+      "email_id": "email-027",
+      "category": "cliente",
+      "priority": "media",
+      "summary": "Confirmación reunión y trabajo futuro",
+      "contact_name": "Carlos Empresa Cliente",
+      "tasks": [
+        {
+          "description": "Preparar propuesta para próximos proyectos",
+          "due_date": "2025-11-30T23:59:00Z",
+          "tags": ["propuesta"],
+          "participants": ["carlos.rechazo@empresa-cliente.com"]
+        },
+        {
+          "description": "Programar próxima reunión de seguimiento",
+          "due_date": "2025-12-05T17:00:00Z",
+          "tags": ["reunion"],
+          "participants": ["carlos.rechazo@empresa-cliente.com"]
+        }
+      ]
+    }
+  }
+]

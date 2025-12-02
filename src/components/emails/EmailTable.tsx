@@ -488,14 +488,17 @@ export default function EmailTable() {
       {/* Estado de conexión e importación desde Gmail */}
       <GmailConnectionStatus onImported={() => reloadEmails()} />
 
-      {/* Banner de correos no procesables ocultos (HITO 3 Filtrado No Procesables) */}
-      {nonProcessableCount !== null && nonProcessableCount > 0 && (
+      {/* Banner de correos no procesables ocultos (HITO 3 Filtrado No Procesables) 
+            {nonProcessableCount !== null && nonProcessableCount > 0 && (
         <div className="text-xs text-[color:var(--color-text-secondary)] bg-[color:var(--color-bg-muted)] border border-[color:var(--color-border-light)] rounded-md px-3 py-2">
           ℹ️ {nonProcessableCount} correos de tu Gmail (promocionales o sin
           contenido útil) se han ocultado automáticamente para centrarse en
           correos de negocio. Revísalos en tu Gmail si los necesitas.
         </div>
       )}
+      
+      */}
+
       {nonProcessableError && (
         <div className="text-xs text-[color:var(--color-danger-700)]">
           {nonProcessableError}

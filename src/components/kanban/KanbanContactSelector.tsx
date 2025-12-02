@@ -168,10 +168,10 @@ export default function KanbanContactSelector({
             className="w-4 h-4 text-[color:var(--color-info)]"
             aria-hidden
           />
-          <span className="text-xs font-medium text-[color:var(--color-info)]">
+          <span className=" font-medium text-[color:var(--color-info)]">
             Filtrar por contacto:
           </span>
-          <span className="text-[10px] text-[color:var(--color-text-muted)] truncate ">
+          <span className=" text-[color:var(--color-info)] truncate ">
             {hasSelection
               ? `${selectedIds.length} contacto(s) seleccionados`
               : "Sin filtros aplicados"}
@@ -209,7 +209,7 @@ export default function KanbanContactSelector({
                   {selectedContacts.slice(0, MAX_VISIBLE_CHIPS).map((contact) => (
                     <span
                       key={contact.id}
-                      className="inline-flex items-center gap-1 rounded-full px-2 py-[1px] text-[10px] bg-[color:var(--color-bg-soft)] border border-[color:var(--color-border-subtle)] text-[color:var(--color-text-primary)]"
+                      className="inline-flex items-center gap-1 rounded-full px-2 py-[1px] bg-[color:var(--color-bg-soft)] border border-[color:var(--color-border-subtle)] text-[color:var(--color-text-primary)]"
                     >
                       <span className="max-w-[80px] truncate">
                         {contact.name ?? contact.email}
@@ -227,13 +227,13 @@ export default function KanbanContactSelector({
                     </span>
                   ))}
                   {chipsOverflow > 0 && (
-                    <span className="text-[10px] text-[color:var(--color-text-muted)]">
+                    <span className="text-[color:var(--color-text-muted)]">
                       +{chipsOverflow}
                     </span>
                   )}
                 </>
               ) : (
-                <span className="text-[10px] text-[color:var(--color-text-muted)] truncate">
+                <span className=" text-[color:var(--color-text-muted)] truncate">
                   {placeholder}
                 </span>
               )}
@@ -269,7 +269,7 @@ export default function KanbanContactSelector({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-transparent outline-none text-[11px] text-[color:var(--color-text-primary)] placeholder:text-[color:var(--color-text-muted)]"
+                className="w-full bg-transparent outline-none  text-[color:var(--color-text-primary)] placeholder:text-[color:var(--color-text-muted)]"
                 placeholder="Buscar por nombre o email..."
                 autoFocus
               />
@@ -328,13 +328,13 @@ export default function KanbanContactSelector({
                             {contact.name ?? contact.email}
                           </span>
                           {contact.name && (
-                            <span className="text-[10px] text-[color:var(--color-text-muted)] truncate max-w-[220px]">
+                            <span className="text-[color:var(--color-text-muted)] truncate max-w-[220px]">
                               {contact.email}
                             </span>
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 text-[9px] text-[color:var(--color-text-muted)]">
+                      <div className="flex items-center gap-2  text-[color:var(--color-text-muted)]">
                         {typeof contact.todoTasks === "number" &&
                           contact.todoTasks > 0 && (
                             <span>Por hacer: {contact.todoTasks}</span>

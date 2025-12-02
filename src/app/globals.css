@@ -751,6 +751,34 @@
     color: var(--color-estado-done-text);
   }
 
+  .badge-aprobado {
+    background-color: var(--color-aprobado-bg);
+    color: var(--color-aprobado-text);
+    border: 1px solid var(--color-aprobado-border);
+    font-weight: var(--font-weight-medium);
+  }
+  
+  .badge-email-nuevo {
+    background-color: var(--color-primary-100);
+    color: var(--color-primary-800);
+    border: 1px solid var(--color-primary-300);
+    font-weight: var(--font-weight-medium);
+  }
+
+  .badge-email-rechazado {
+    background-color: var(--color-danger-100);
+    color: var(--color-danger-800);
+    border: 1px solid var(--color-danger-300);
+    font-weight: var(--font-weight-medium);
+  }
+
+  /* Corregir contador de estado en columnas Kanban */
+  .badge-estado-count {
+    background-color: var(--color-bg-card);
+    border: 1px solid var(--color-border-light);
+    color: var(--color-text-primary);
+    font-weight: var(--font-weight-medium);
+  }
   .badge-procesado {
     background-color: var(--color-procesado-bg);
     color: var(--color-procesado-text);
@@ -974,6 +1002,31 @@
     color: var(--color-neutral-700);
     border: 1px solid var(--color-neutral-300);
   }
+  /* ============================================
+   * CONTADORES DE CHIPS DE PRIORIDAD ACTIVOS
+   * ============================================ */
+   
+  /* Chip de prioridad Alta - Contador activo */
+  .chip-prioridad-alta-active .estado-chip-count {
+    background-color: rgba(0, 0, 0, 0.18);
+    color: var(--color-text-inverse);
+  }
+
+  /* Chip de prioridad Media - Contador activo */
+  .chip-prioridad-media-active .estado-chip-count {
+    background-color: rgba(0, 0, 0, 0.18);
+    color: var(--color-text-inverse);
+  }
+
+  /* Chip de prioridad Baja - Contador activo */
+  .chip-prioridad-baja-active .estado-chip-count {
+    background-color: rgba(0, 0, 0, 0.20);
+    color: var(--color-text-inverse);
+  }
+
+  /* ============================================
+   * EMAIL NUEVO - Resaltado de fila
+   * ============================================ */
 
   .chip-prioridad-alta:hover,
   .chip-prioridad-media:hover,
@@ -1436,6 +1489,122 @@
     }
   }
 }
+  /* ============================================
+   * INDICADOR NIVEL DE CONFIANZA IA
+   * ============================================ */
+  .confidence-indicator {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+  }
+
+  .confidence-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 0.35rem 0.75rem;
+    border-radius: 9999px;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    border: 1px solid var(--color-border-light);
+    background-color: var(--color-neutral-100);
+    color: var(--color-neutral-800);
+  }
+
+  .confidence-score {
+    font-weight: var(--font-weight-bold);
+    font-size: var(--font-size-sm);
+  }
+
+  .confidence-label {
+    text-transform: uppercase;
+    letter-spacing: var(--letter-spacing-wide);
+  }
+
+  .confidence-excellent {
+    background-color: var(--color-secondary-100);
+    color: var(--color-secondary-800);
+    border-color: var(--color-secondary-300);
+  }
+
+  .confidence-good {
+    background-color: var(--color-primary-100);
+    color: var(--color-primary-800);
+    border-color: var(--color-primary-300);
+  }
+
+  .confidence-acceptable {
+    background-color: var(--color-warning-100);
+    color: var(--color-warning-800);
+    border-color: var(--color-warning-300);
+  }
+
+  .confidence-doubtful {
+    background-color: var(--color-warning-50);
+    color: var(--color-warning-700);
+    border-color: var(--color-warning-200);
+  }
+
+  .confidence-low {
+    background-color: var(--color-danger-100);
+    color: var(--color-danger-800);
+    border-color: var(--color-danger-300);
+  }
+
+  .confidence-details {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+  }
+
+  .confidence-reason {
+    margin: 0;
+  }
+
+  .confidence-toggle {
+    margin-top: var(--space-1);
+    padding: 0;
+    border: none;
+    background: none;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-link);
+    cursor: pointer;
+  }
+
+  .confidence-toggle:hover {
+    color: var(--color-text-link-hover);
+    text-decoration: underline;
+  }
+
+  .confidence-breakdown-wrapper {
+    margin-top: var(--space-1);
+  }
+
+  .confidence-breakdown {
+    margin-top: var(--space-1);
+    padding: var(--space-2);
+    border-radius: var(--radius-md);
+    border: 1px dashed var(--color-border-light);
+    background-color: var(--color-bg-muted);
+  }
+
+  .confidence-breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-2);
+    font-size: var(--font-size-xs);
+    padding: 2px 0;
+  }
+
+  .confidence-breakdown-row dt {
+    color: var(--color-text-secondary);
+  }
+
+  .confidence-breakdown-row dd {
+    margin: 0;
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-primary);
+  }
 
 /* ============================================
  * RESPONSIVE UTILITIES

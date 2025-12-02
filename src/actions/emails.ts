@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { requireCurrentUserId } from "@/lib/auth-session"
+import { logActivity } from "@/lib/activity-logger"
+import type { EmailImportMetadata } from "@/types/activity"
 
 const EmailSchema = z.object({
   from: z.string().email("Email inválido"),
@@ -652,6 +654,53 @@ export async function importEmailsFromJSON(jsonData: string): Promise<ImportResu
     // Si hay errores, marcar como parcialmente exitoso
     if (result.errors.length > 0) {
       result.success = result.imported > 0
+    }
+
+    // Registrar actividad en el historial
+    try {
+      const metadata: EmailImportMetadata = {
+        totalEmails: result.total,
+        successfulImports: result.imported,
+        failedImports: result.errors.length,
+        duplicates: 0, // TODO: implementar detección de duplicados si es necesario
+        source: "json_upload",
+        errors: result.errors.slice(0, 5).map(err => ({
+          idEmail: err.email || "unknown",
+          reason: err.error
+        }))
+      }
+
+      // Determinar estado de la actividad
+      let activityStatus: "success" | "partial_success" | "error" = "error"
+      if (result.imported === result.total && result.errors.length === 0) {
+        activityStatus = "success"
+      } else if (result.imported > 0) {
+        activityStatus = "partial_success"
+      }
+
+      // Obtener IDs de emails importados exitosamente (solo los primeros 10 para no sobrecargar)
+      const successfulEmailIds = await prisma.email.findMany({
+        where: {
+          userId,
+          createdAt: {
+            gte: new Date(Date.now() - 5 * 60 * 1000) // emails creados en los últimos 5 minutos
+          }
+        },
+        select: { id: true },
+        take: 10
+      })
+
+      await logActivity({
+        userId,
+        activityType: "email_import",
+        status: activityStatus,
+        description: `Importados ${result.imported} de ${result.total} emails desde JSON`,
+        metadata,
+        relatedEmailIds: successfulEmailIds.map(e => e.id),
+      })
+    } catch (activityError) {
+      console.error("Error al registrar actividad de importación:", activityError)
+      // No interrumpir el flujo principal si falla el logging
     }
 
     // Revalidar cachés

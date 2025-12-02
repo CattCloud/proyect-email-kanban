@@ -10,9 +10,38 @@ import {
   buildContactsUpserts,
 } from "@/lib/ai-mapper";
 import { normalizeTagLabel } from "@/lib/tag-utils";
-import type { EmailAnalysis } from "@/types/ai";
+import type { EmailAnalysis, EmailInput } from "@/types/ai";
 import { Prisma } from "@prisma/client";
 import { requireCurrentUserId } from "@/lib/auth-session";
+import { calculateConfidenceLevel } from "@/lib/confidence-calculator";
+import { logActivity } from "@/lib/activity-logger";
+import type { AIProcessingMetadata } from "@/types/activity";
+
+// Precios de OpenAI (verificar actualizaciones periódicamente)
+const MODEL_PRICING = {
+  "gpt-4o-mini": { 
+    prompt: 0.150 / 1_000_000, 
+    completion: 0.600 / 1_000_000 
+  },
+  "gpt-4o": { 
+    prompt: 2.50 / 1_000_000, 
+    completion: 10.00 / 1_000_000 
+  },
+};
+
+function calculateAICost(usage: TokenUsage | undefined, model: string): number {
+  if (!usage || !usage.promptTokens || !usage.completionTokens) {
+    return 0; // Sin costo si no hay usage data
+  }
+  
+  const pricing = MODEL_PRICING[model as keyof typeof MODEL_PRICING] || MODEL_PRICING["gpt-4o-mini"];
+  
+  const cost = 
+    (usage.promptTokens * pricing.prompt) +
+    (usage.completionTokens * pricing.completion);
+  
+  return cost * 100; // Convertir a centavos
+}
 
 // Wrapper seguro para revalidación (evita fallos en entorno de tests/CLI)
 function revalidateSafe(path: string): void {
@@ -111,7 +140,7 @@ export async function getUnprocessedEmails(
           id: userId,
         },
       },
-    } as unknown as Prisma.EmailWhereInput;
+    };
 
     const [total, data] = await Promise.all([
       prisma.email.count({ where }),
@@ -121,7 +150,7 @@ export async function getUnprocessedEmails(
           metadata: {
             include: { tasks: true },
           },
-        } as unknown as Prisma.EmailInclude,
+        },
         orderBy: [{ receivedAt: "desc" }],
         skip: (p - 1) * ps,
         take: ps,
@@ -141,9 +170,10 @@ export async function getUnprocessedEmails(
  *  - Llama a OpenAI (batch)
  *  - Valida y mapea resultados
  *  - Upsert de EmailMetadata + Task[] + Contact
+ *  - Cálculo y persistencia de AIConfidenceScore
  *  - Manejo de errores granular por email
  *
- * HITO 2 (Filtrado Correos No Procesables):
+ *  HITO 2 (Filtrado Correos No Procesables):
  *  - Solo procesa emails isProcessable = true.
  */
 export async function processEmailsWithAI(
@@ -170,7 +200,7 @@ export async function processEmailsWithAI(
             id: userId,
           },
         },
-      } as unknown as Prisma.EmailWhereInput,
+      },
     });
 
     if (emails.length === 0) {
@@ -190,6 +220,12 @@ export async function processEmailsWithAI(
     // Mapear a input IA
     const aiInputs = emails.map(mapEmailToAIInput);
 
+    // Índice rápido EmailInput por id (para usar en cálculo de confianza)
+    const inputById: Record<string, EmailInput> = {};
+    for (const input of aiInputs) {
+      inputById[input.id] = input;
+    }
+
     // HITO 2: Cargar catálogo de etiquetas existentes para el prompt de IA
     const tagRowsForPrompt = await prisma.tag.findMany({
       orderBy: { descripcion: "asc" },
@@ -206,7 +242,7 @@ export async function processEmailsWithAI(
       summary.validationErrors = aiResult.errors;
     }
 
-    // HITO 3: Detectar y registrar nuevas etiquetas propuestas por IA
+    // HITO 3 (tags): Detectar y registrar nuevas etiquetas propuestas por IA
     try {
       const normalizedFromAI = new Set<string>();
 
@@ -240,7 +276,7 @@ export async function processEmailsWithAI(
         if (newTags.length > 0) {
           await prisma.tag.createMany({
             data: newTags.map((descripcion) => ({ descripcion })),
-            skipDuplicates: true, // idempotencia ante condiciones de carrera
+            skipDuplicates: true,
           });
         }
       }
@@ -249,7 +285,7 @@ export async function processEmailsWithAI(
       // Importante: no interrumpir el flujo principal de procesamiento
     }
 
-    // Index rápido por ID de email en BD sin usar `any`
+    // Index rápido por ID de email en BD
     const emailById: Record<string, (typeof emails)[number]> = {};
     for (const email of emails) {
       emailById[email.id] = email;
@@ -267,8 +303,21 @@ export async function processEmailsWithAI(
         continue;
       }
 
+      // Construir EmailInput extendido con reprocessCount para el cálculo
+      const baseInput = inputById[emailId] ?? mapEmailToAIInput(email);
+      const extendedInput: EmailInput & { reprocessCount: number } = {
+        ...baseInput,
+        reprocessCount: email.reprocessCount ?? 0,
+      };
+
+      const confidence = calculateConfidenceLevel(extendedInput, analysis, {
+        existingTags,
+        historicalApprovals: 0,
+        knownCategory: undefined,
+      });
+
       try {
-        // Transacción por email: upsert de metadata+tasks, contactos y marca como procesado por IA
+        // 1) Transacción: metadata + tasks + contactos + email (estado)
         await prisma.$transaction(async (tx) => {
           // Upsert metadata + tasks
           const mdUpsertArgs = buildEmailMetadataUpsertArgs(email, analysis);
@@ -280,11 +329,63 @@ export async function processEmailsWithAI(
             await tx.contact.upsert(args);
           }
 
-          // Marcar email como procesado por IA (processedAt != null)
+          // Determinar si se trata de un reprocesamiento (email previamente rechazado)
+          const isReprocess =
+            email.rejectionReason !== null ||
+            email.previousAIResult !== null ||
+            email.rejectedAt !== null;
+
+          const currentReprocessCount = email.reprocessCount ?? 0;
+
+          const newReprocessCount = isReprocess
+            ? currentReprocessCount + 1
+            : currentReprocessCount;
+
+          // Marcar email como procesado por IA y actualizar reprocessCount
           await tx.email.update({
             where: { id: email.id },
-            data: { processedAt: new Date() },
+            data: {
+              processedAt: new Date(),
+              reprocessCount: newReprocessCount,
+            },
           });
+        });
+
+        // 2) Upsert de AIConfidenceScore FUERA de la transacción principal
+        await prisma.aIConfidenceScore.upsert({
+          where: { emailId: email.id },
+          create: {
+            emailId: email.id,
+            overallScore: confidence.overallScore,
+            clarityScore: confidence.signals.clarityScore,
+            patternMatchScore: confidence.signals.patternMatchScore,
+            completenessScore: confidence.signals.completenessScore,
+            priorityCoherenceScore: confidence.signals.priorityCoherenceScore,
+            taskValidityScore: confidence.signals.taskValidityScore,
+            tagsQualityScore: confidence.signals.tagsQualityScore,
+            feedbackPenalty: confidence.signals.feedbackPenalty,
+            interpretation: confidence.interpretation,
+            requiresReview: confidence.requiresReview,
+            reviewPriority: 100 - confidence.overallScore,
+            confidenceReason: confidence.reason,
+            breakdown: confidence.signals as unknown as Prisma.InputJsonValue
+
+          },
+          update: {
+            overallScore: confidence.overallScore,
+            clarityScore: confidence.signals.clarityScore,
+            patternMatchScore: confidence.signals.patternMatchScore,
+            completenessScore: confidence.signals.completenessScore,
+            priorityCoherenceScore: confidence.signals.priorityCoherenceScore,
+            taskValidityScore: confidence.signals.taskValidityScore,
+            tagsQualityScore: confidence.signals.tagsQualityScore,
+            feedbackPenalty: confidence.signals.feedbackPenalty,
+            interpretation: confidence.interpretation,
+            requiresReview: confidence.requiresReview,
+            reviewPriority: 100 - confidence.overallScore,
+            confidenceReason: confidence.reason,
+            breakdown: confidence.signals as unknown as Prisma.InputJsonValue
+          },
         });
 
         summary.processed += 1;
@@ -302,6 +403,61 @@ export async function processEmailsWithAI(
     revalidateSafe("/kanban");
     revalidateSafe("/");
     summary.success = summary.errors.length === 0;
+
+    // Registrar actividad en el historial
+    try {
+      // Calcular costo aproximado
+      const estimatedCost = calculateAICost(summary.usage, summary.modelUsed || "gpt-4o-mini")
+      
+      // Calcular confianza promedio y baja confianza
+      const averageConfidence = 75 // TODO: calcular confianza promedio real basada en confidenceScore
+      const lowConfidenceCount = 0 // TODO: calcular número real de emails con baja confianza
+      
+      const metadata: AIProcessingMetadata = {
+        totalEmailsProcessed: summary.processed,
+        successfulAnalysis: summary.processed,
+        failedAnalysis: summary.errors.length,
+        tokensUsed: summary.usage ? {
+          prompt: summary.usage.promptTokens || 0,
+          completion: summary.usage.completionTokens || 0,
+          total: summary.usage.totalTokens || 0,
+        } : {
+          prompt: 0,
+          completion: 0,
+          total: 0,
+        },
+        model: summary.modelUsed || "gpt-4o-mini",
+        averageConfidence: Math.round(averageConfidence),
+        lowConfidenceCount,
+        errors: summary.errors.slice(0, 5).map(err => ({
+          emailId: err.emailId,
+          subject: "Email processing failed", // TODO: obtener subject real del email si es necesario
+          error: err.error
+        }))
+      }
+
+      // Determinar estado de la actividad
+      let activityStatus: "success" | "partial_success" | "error" = "error"
+      if (summary.errors.length === 0 && summary.processed > 0) {
+        activityStatus = "success"
+      } else if (summary.processed > 0) {
+        activityStatus = "partial_success"
+      }
+
+      await logActivity({
+        userId,
+        activityType: "ai_processing",
+        status: activityStatus,
+        description: `Procesados ${summary.processed} emails con IA (confianza promedio: ${Math.round(averageConfidence)}%)`,
+        metadata,
+        estimatedCost,
+        relatedEmailIds: emailIds,
+      })
+    } catch (activityError) {
+      console.error("Error al registrar actividad de procesamiento IA:", activityError)
+      // No interrumpir el flujo principal si falla el logging
+    }
+
     return summary;
   } catch (error) {
     console.error("processEmailsWithAI error:", error);
@@ -318,9 +474,6 @@ export async function processEmailsWithAI(
  *  - Emails con processedAt !== null y approvedAt IS NULL
  *  - Incluye EmailMetadata + Tasks (recientemente generados)
  *  - Filtra por IDs específicos
- *
- * HITO 2 (Filtrado Correos No Procesables):
- *  - Solo devuelve emails isProcessable = true.
  */
 export async function getPendingAIResults(
   emailIds: string[]
@@ -332,7 +485,6 @@ export async function getPendingAIResults(
     const data = await prisma.email.findMany({
       where: {
         id: { in: ids },
-        // Emails ya procesados por IA pero aún no aprobados
         processedAt: { not: null },
         approvedAt: null,
         isProcessable: true,
@@ -341,12 +493,13 @@ export async function getPendingAIResults(
             id: userId,
           },
         },
-      } as unknown as Prisma.EmailWhereInput,
+      },
       include: {
         metadata: {
           include: { tasks: true },
         },
-      } as unknown as Prisma.EmailInclude,
+        confidenceScore: true,
+      },
       orderBy: [{ receivedAt: "desc" }],
     });
 
@@ -359,16 +512,6 @@ export async function getPendingAIResults(
 
 /**
  * Confirma o rechaza resultados IA de un email del usuario actual.
- *
- * - confirmed = true:
- *    - Marca approvedAt = now (email ya debe estar procesado por IA)
- *    - Limpia rejectionReason y previousAIResult (se establece JsonNull en la columna JSON)
- * - confirmed = false:
- *    - Construye un snapshot JSON del resultado IA actual (EmailMetadata + Tasks)
- *    - Guarda rejectionReason (si se proporciona)
- *    - Guarda previousAIResult con ese snapshot JSON
- *    - Elimina EmailMetadata (+ cascade elimina Tasks)
- *    - Revierte processedAt/approvedAt a null
  */
 export async function confirmAIResults(
   emailId: string,
@@ -379,7 +522,6 @@ export async function confirmAIResults(
     const userId = await requireCurrentUserId();
     const id = SingleEmailIdSchema.parse(emailId);
 
-    // Verificar existencia + cargar metadata y tasks para snapshot
     const existing = await prisma.email.findFirst({
       where: {
         id,
@@ -393,14 +535,13 @@ export async function confirmAIResults(
         metadata: {
           include: { tasks: true },
         },
-      } as unknown as Prisma.EmailInclude,
+      },
     });
 
     if (!existing) return { success: false, error: "Email no encontrado" };
 
     const normalizedReason = rejectionReason?.trim() || null;
 
-    // Construir snapshot JSON solo en caso de rechazo y si existe metadata
     let previousAIResultSnapshot:
       | Prisma.InputJsonValue
       | Prisma.NullableJsonNullValueInput;
@@ -418,7 +559,6 @@ export async function confirmAIResults(
         tasks: (meta.tasks ?? []).map((t: SnapshotTask) => ({
           id: t.id,
           description: t.description,
-          // Convertir Date a ISO string para que sea JSON válido
           dueDate: t.dueDate ? t.dueDate.toISOString() : null,
           tags: t.tags,
           participants: t.participants,
@@ -426,7 +566,6 @@ export async function confirmAIResults(
         })),
       } satisfies Prisma.InputJsonValue;
     } else {
-      // JsonNull para representar ausencia explícita de snapshot
       previousAIResultSnapshot = Prisma.JsonNull;
     }
 
@@ -434,7 +573,6 @@ export async function confirmAIResults(
       const updated = await prisma.email.update({
         where: { id },
         data: {
-          // processedAt ya se establece al finalizar processEmailsWithAI
           approvedAt: new Date(),
           rejectionReason: null,
           previousAIResult: Prisma.JsonNull,
@@ -444,7 +582,7 @@ export async function confirmAIResults(
           metadata: {
             include: { tasks: true },
           },
-        } as unknown as Prisma.EmailInclude,
+        },
       });
       revalidateSafe("/emails");
       revalidateSafe("/kanban");
@@ -454,7 +592,6 @@ export async function confirmAIResults(
         message: "Resultados IA confirmados y marcados como aprobados",
       };
     } else {
-      // Rechazar: guardar snapshot + motivo y revertir a estado "No procesado"
       await prisma.$transaction(async (tx) => {
         await tx.emailMetadata.deleteMany({ where: { emailId: id } });
         await tx.email.update({
@@ -516,34 +653,21 @@ export async function updateProcessedAt(
 }
 
 /**
- * Obtener TODOS los resultados IA pendientes de revisión del usuario actual
- * (processedAt IS NOT NULL y approvedAt IS NULL)
- * Incluye EmailMetadata + Tasks para permitir edición/confirmación
- *
- * HITO 2 (Filtrado Correos No Procesables):
- *  - Solo devuelve emails isProcessable = true.
- *
- * Regla adicional (tarea solicitada):
- *  - Si el email tiene tareas con estado "doing" o "done" en el Kanban,
- *    deja de mostrarse en la página de Revisión IA, aunque approvedAt siga en null.
+ * Obtener TODOS los resultados IA pendientes de revisión del usuario actual.
  */
 export async function getPendingAllAIResults(): Promise<GenericActionResult> {
   try {
     const userId = await requireCurrentUserId();
 
     const where = {
-      // Emails ya procesados por IA pero aún no aprobados
       processedAt: { not: null },
       approvedAt: null,
       isProcessable: true,
-      // Filtrar por usuario dueño del email
       user: {
         is: {
           id: userId,
         },
       },
-      // Deben existir resultados IA a revisar (metadata creada) y
-      // sus tareas no pueden estar en "doing" ni "done".
       metadata: {
         is: {
           tasks: {
@@ -553,7 +677,7 @@ export async function getPendingAllAIResults(): Promise<GenericActionResult> {
           },
         },
       },
-    } as unknown as Prisma.EmailWhereInput;
+    };
 
     const data = await prisma.email.findMany({
       where,
@@ -561,8 +685,12 @@ export async function getPendingAllAIResults(): Promise<GenericActionResult> {
         metadata: {
           include: { tasks: true },
         },
-      } as unknown as Prisma.EmailInclude,
-      orderBy: [{ receivedAt: "desc" }],
+        confidenceScore: true,
+      },
+      orderBy: [
+        { confidenceScore: { reviewPriority: "desc" } },
+        { receivedAt: "desc" },
+      ],
     });
 
     return { success: true, data };
@@ -574,8 +702,6 @@ export async function getPendingAllAIResults(): Promise<GenericActionResult> {
 
 /**
  * HITO 4: Confirmar resultados IA (wrapper)
- * - Marca approvedAt = now (publica resultados)
- * - Revalida rutas
  */
 export async function confirmProcessingResults(
   emailId: string
@@ -585,10 +711,6 @@ export async function confirmProcessingResults(
 
 /**
  * HITO 4/HITO 3: Rechazar resultados IA (wrapper con motivo)
- * - Rechaza el resultado IA, guarda snapshot + motivo de rechazo
- * - Revalida rutas
- *
- * Este wrapper se usará desde la UI con el modal de motivos.
  */
 export async function rejectProcessingResultsWithReason(
   emailId: string,
@@ -599,8 +721,6 @@ export async function rejectProcessingResultsWithReason(
 
 /**
  * Wrapper legacy sin motivo (compatibilidad con código existente)
- * - Rechaza el resultado IA pero no guarda un motivo explícito
- *   (rejectionReason queda en null, solo se guarda snapshot si aplica)
  */
 export async function rejectProcessingResults(
   emailId: string

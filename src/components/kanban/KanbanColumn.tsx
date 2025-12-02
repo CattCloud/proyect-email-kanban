@@ -1,8 +1,9 @@
 "use client";
 
 import { useDroppable } from "@dnd-kit/core";
-import type { KanbanTask } from "@/types";
+import type { KanbanTask, TaskStatus } from "@/types";
 import TaskCard from "./TaskCard";
+import KanbanEmptyPlaceholder from "./KanbanEmptyPlaceholder";
 import { Circle, Clock, CheckCircle } from "lucide-react";
 
 /**
@@ -24,7 +25,7 @@ export default function KanbanColumn({
 }: {
   title: string;
   tasks: KanbanTask[];
-  status: "todo" | "doing" | "done";
+  status: TaskStatus;
 }) {
   const Icon =
     status === "todo" ? Circle : status === "doing" ? Clock : CheckCircle;
@@ -41,6 +42,8 @@ export default function KanbanColumn({
       : status === "doing"
       ? "border-l-4 border-l-[color:var(--color-primary-500)]"
       : "border-l-4 border-l-[color:var(--color-secondary-500)]";
+
+  const isEmpty = tasks.length === 0;
 
   return (
     <div
@@ -62,13 +65,19 @@ export default function KanbanColumn({
         </span>
       </div>
 
-      {tasks.length === 0 ? (
-        <div className="text-sm text-[color:var(--color-text-muted)] italic">
-          No hay tareas en {title.toLowerCase()}.
-        </div>
-      ) : (
-        tasks.map((task) => <TaskCard key={task.id} task={task} />)
-      )}
+      <div className="relative">
+        {isEmpty ? (
+          // Placeholder fantasma SOLO cuando no hay tareas
+          <KanbanEmptyPlaceholder status={status} />
+        ) : (
+          // Lista de tarjetas con entrada suave
+          <div className="transition-opacity duration-200 ease-out animate-fade-in">
+            {tasks.map((task) => (
+              <TaskCard key={task.id} task={task} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

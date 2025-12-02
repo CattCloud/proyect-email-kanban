@@ -4,7 +4,8 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  //url      = env("DATABASE_URL")
+  url = env("DATABASE_URL")
+ 
 }
 
 model User {
@@ -17,6 +18,7 @@ model User {
   emails Email[]
   tasks  Task[]
   gmailAccount GmailAccount?
+  activityLogs ActivityLog[]
 }
 
 model Email {
@@ -34,11 +36,16 @@ model Email {
   previousAIResult Json?      // Snapshot JSON del análisis IA descartado
   rejectedAt      DateTime?   // Fecha/hora del último rechazo de IA
 
+  // Nivel de confianza IA y reprocesos
+  reprocessCount  Int @default(0)
+  confidenceScore AIConfidenceScore?
+
   // Asociación por usuario (multiusuario)
   userId String
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   isProcessable Boolean @default(true)
+
   @@index([from])
   @@index([subject])
   @@index([processedAt])
@@ -109,6 +116,39 @@ model Tag {
   @@index([descripcion])
 }
 
+model AIConfidenceScore {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relación 1:1 con Email
+  emailId String @unique
+  email   Email  @relation(fields: [emailId], references: [id], onDelete: Cascade)
+
+  // Score general
+  overallScore Float // 0-100
+
+  // Desglose individual
+  clarityScore           Float
+  patternMatchScore      Float
+  completenessScore      Float
+  priorityCoherenceScore Float
+  taskValidityScore      Float
+  tagsQualityScore       Float
+  feedbackPenalty        Float
+
+  // Interpretación
+  interpretation   String  // "excelente" | "bueno" | "aceptable" | "dudoso" | "bajo"
+  requiresReview   Boolean
+  reviewPriority   Int     // 0-100, inversamente proporcional a overallScore
+  confidenceReason String  // Razón legible para el usuario
+
+  // Opcional: JSON completo para debugging
+  breakdown Json?
+
+  @@index([overallScore])
+  @@index([reviewPriority])
+}
 
 model GmailAccount {
   id           String   @id @default(cuid())
@@ -125,4 +165,36 @@ model GmailAccount {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  
+  // Usuario que ejecutó la acción
+  userId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Tipo de actividad (enum limitado)
+  activityType String // "email_import" | "ai_processing" | "kanban_update"
+  
+  // Metadata específica según tipo (JSON flexible)
+  metadata Json
+  
+  // Resultado de la operación
+  status String // "success" | "partial_success" | "error"
+  
+  // Mensaje descriptivo para el usuario
+  description String
+  
+  // Costo aproximado (solo para ai_processing)
+  estimatedCost Float? // En centavos de USD ($0.01 = 1 centavo)
+  
+  // Opcional: relacionar con entidades específicas
+  relatedEmailIds String[] // IDs de emails involucrados
+  relatedTaskIds  String[] // IDs de tareas involucradas
+  
+  @@index([userId, createdAt])
+  @@index([activityType, userId])
+  @@index([createdAt])
 }

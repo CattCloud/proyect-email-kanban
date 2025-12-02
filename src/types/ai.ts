@@ -147,3 +147,57 @@ export function sanitizeTextForAI(input: string): string {
   }
   return output;
 }
+
+
+export interface ConfidenceSignals {
+  clarityScore: number; // 0-100
+  patternMatchScore: number; // 0-100
+  completenessScore: number; // 0-100
+  priorityCoherenceScore: number; // 0-100
+  taskValidityScore: number; // 0-100
+  tagsQualityScore: number; // 0-100
+  /**
+   * Penalización basada en historial de reprocesos.
+   * 100 = sin penalización, valores menores indican más penalización.
+   */
+  feedbackPenalty: number; // 0-100
+}
+
+export type ConfidenceInterpretation =
+  | "excelente"
+  | "bueno"
+  | "aceptable"
+  | "dudoso"
+  | "bajo";
+
+export type ConfidenceColor = "green" | "yellow" | "orange" | "red";
+
+export interface ConfidenceBreakdown {
+  overallScore: number; // 0-100
+  signals: ConfidenceSignals;
+  interpretation: ConfidenceInterpretation;
+  color: ConfidenceColor;
+  requiresReview: boolean;
+  /**
+   * Explicación legible para el usuario, basada en la señal más débil
+   * y el rango del score global.
+   */
+  reason: string;
+}
+
+export const ConfidenceBreakdownSchema = z.object({
+  overallScore: z.number().min(0).max(100),
+  signals: z.object({
+    clarityScore: z.number().min(0).max(100),
+    patternMatchScore: z.number().min(0).max(100),
+    completenessScore: z.number().min(0).max(100),
+    priorityCoherenceScore: z.number().min(0).max(100),
+    taskValidityScore: z.number().min(0).max(100),
+    tagsQualityScore: z.number().min(0).max(100),
+    feedbackPenalty: z.number().min(0).max(100),
+  }),
+  interpretation: z.enum(["excelente", "bueno", "aceptable", "dudoso", "bajo"]),
+  color: z.enum(["green", "yellow", "orange", "red"]),
+  requiresReview: z.boolean(),
+  reason: z.string(),
+});

@@ -38,6 +38,10 @@ export interface PrismaEmail {
    */
   userId: string;
 
+  // Número de veces que el email ha sido reprocesado tras rechazo IA.
+  // Refleja el campo Email.reprocessCount en prisma/schema.prisma
+  reprocessCount: number;
+
   metadata?: EmailMetadata | null;
 }
 

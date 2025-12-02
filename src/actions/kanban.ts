@@ -12,6 +12,8 @@ import type {
   TaskStatus,
 } from "@/types";
 import { requireCurrentUserId } from "@/lib/auth-session";
+import { logActivity } from "@/lib/activity-logger";
+import type { KanbanUpdateMetadata } from "@/types/activity";
 
 /**
  * Hito Semana 4 + Asociación por usuario
@@ -104,6 +106,15 @@ export interface KanbanTaskOperationResult {
 }
 
 // ========================= Helpers =========================
+
+function getStatusLabel(status: string): string {
+  const labels = {
+    todo: "Por Hacer",
+    doing: "En Progreso", 
+    done: "Completado",
+  };
+  return labels[status as keyof typeof labels] || status;
+}
 
 function revalidateKanbanPaths(): void {
   try {
@@ -488,6 +499,41 @@ export async function updateKanbanTaskStatus(
 
     // 4) Revalidar vistas relacionadas
     revalidateKanbanPaths();
+
+    // Registrar actividad en el historial
+    try {
+      const previousStatus = existing.status as "todo" | "doing" | "done"
+      const newStatus = updatedTask!.status as "todo" | "doing" | "done"
+      
+      // Obtener nombre del contacto del snapshot si existe
+      const contactName = contactSnapshot?.name || undefined
+      
+      const metadata: KanbanUpdateMetadata = {
+        taskId: updatedTask!.id,
+        taskDescription: updatedTask!.description.slice(0, 50),
+        previousStatus,
+        newStatus,
+        relatedEmail: {
+          emailId: updatedTask!.emailMetadata.email.id,
+          subject: updatedTask!.emailMetadata.email.subject,
+          contactName,
+        },
+        triggeredBy: "user_action",
+      }
+
+      await logActivity({
+        userId,
+        activityType: "kanban_update",
+        status: "success",
+        description: `Tarea movida a '${getStatusLabel(newStatus)}': ${updatedTask!.description.slice(0, 50)}...`,
+        metadata,
+        relatedEmailIds: [updatedTask!.emailMetadata.email.id],
+        relatedTaskIds: [updatedTask!.id],
+      })
+    } catch (activityError) {
+      console.error("Error al registrar actividad de actualización Kanban:", activityError)
+      // No interrumpir el flujo principal si falla el logging
+    }
 
     return {
       success: true,
