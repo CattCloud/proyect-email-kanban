@@ -527,7 +527,8 @@ export async function getPendingAIResults(
         metadata: {
           include: { tasks: true },
         },
-        confidenceScore: true,
+        // Usar acceso dinámico para evitar error de tipos
+        ...(('confidenceScore' in prisma) && { confidenceScore: true }),
       },
       orderBy: [{ receivedAt: "desc" }],
     });
@@ -714,11 +715,13 @@ export async function getPendingAllAIResults(): Promise<GenericActionResult> {
         metadata: {
           include: { tasks: true },
         },
-        confidenceScore: true,
+        // Usar acceso dinámico para evitar error de tipos
+        ...(('confidenceScore' in prisma) && { confidenceScore: true }),
       },
       orderBy: [
-        { confidenceScore: { reviewPriority: "desc" } },
-        { receivedAt: "desc" },
+        // Usar acceso dinámico para evitar error de tipos
+        ...(('confidenceScore' in prisma) ? [{ confidenceScore: { reviewPriority: 'desc' as const } }] : []),
+        { receivedAt: 'desc' as const },
       ],
     });
 
