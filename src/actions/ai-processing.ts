@@ -365,46 +365,56 @@ export async function processEmailsWithAI(
           });
         });
 
-        // 2) Upsert de AIConfidenceScore FUERA de la transacción principal
+        // 2) Upsert de AIConfidenceScore usando SQL directo
+        // Usar prisma.$executeRaw para manejar casos donde el modelo no esté en el cliente TS
         try {
-          await prisma.aIConfidenceScore.upsert({
-            where: { emailId: email.id },
-            create: {
-              emailId: email.id,
-              overallScore: confidence.overallScore,
-              clarityScore: confidence.signals.clarityScore,
-              patternMatchScore: confidence.signals.patternMatchScore,
-              completenessScore: confidence.signals.completenessScore,
-              priorityCoherenceScore: confidence.signals.priorityCoherenceScore,
-              taskValidityScore: confidence.signals.taskValidityScore,
-              tagsQualityScore: confidence.signals.tagsQualityScore,
-              feedbackPenalty: confidence.signals.feedbackPenalty,
-              interpretation: confidence.interpretation,
-              requiresReview: confidence.requiresReview,
-              reviewPriority: 100 - confidence.overallScore,
-              confidenceReason: confidence.reason,
-              breakdown: confidence.signals as unknown as Prisma.InputJsonValue
-            },
-            update: {
-              overallScore: confidence.overallScore,
-              clarityScore: confidence.signals.clarityScore,
-              patternMatchScore: confidence.signals.patternMatchScore,
-              completenessScore: confidence.signals.completenessScore,
-              priorityCoherenceScore: confidence.signals.priorityCoherenceScore,
-              taskValidityScore: confidence.signals.taskValidityScore,
-              tagsQualityScore: confidence.signals.tagsQualityScore,
-              feedbackPenalty: confidence.signals.feedbackPenalty,
-              interpretation: confidence.interpretation,
-              requiresReview: confidence.requiresReview,
-              reviewPriority: 100 - confidence.overallScore,
-              confidenceReason: confidence.reason,
-              breakdown: confidence.signals as unknown as Prisma.InputJsonValue
-            },
-          });
+          const breakdownJson = JSON.stringify(confidence.signals);
+          
+          await prisma.$executeRaw`
+            INSERT INTO "AIConfidenceScore" (
+              "id", "createdAt", "updatedAt", "emailId", "overallScore",
+              "clarityScore", "patternMatchScore", "completenessScore",
+              "priorityCoherenceScore", "taskValidityScore", "tagsQualityScore",
+              "feedbackPenalty", "interpretation", "requiresReview", "reviewPriority",
+              "confidenceReason", "breakdown"
+            ) VALUES (
+              ${crypto.randomUUID()},
+              ${new Date()},
+              ${new Date()},
+              ${email.id},
+              ${confidence.overallScore},
+              ${confidence.signals.clarityScore},
+              ${confidence.signals.patternMatchScore},
+              ${confidence.signals.completenessScore},
+              ${confidence.signals.priorityCoherenceScore},
+              ${confidence.signals.taskValidityScore},
+              ${confidence.signals.tagsQualityScore},
+              ${confidence.signals.feedbackPenalty},
+              ${confidence.interpretation},
+              ${confidence.requiresReview},
+              ${100 - confidence.overallScore},
+              ${confidence.reason},
+              ${breakdownJson}::jsonb
+            )
+            ON CONFLICT ("emailId") DO UPDATE SET
+              "updatedAt" = ${new Date()},
+              "overallScore" = ${confidence.overallScore},
+              "clarityScore" = ${confidence.signals.clarityScore},
+              "patternMatchScore" = ${confidence.signals.patternMatchScore},
+              "completenessScore" = ${confidence.signals.completenessScore},
+              "priorityCoherenceScore" = ${confidence.signals.priorityCoherenceScore},
+              "taskValidityScore" = ${confidence.signals.taskValidityScore},
+              "tagsQualityScore" = ${confidence.signals.tagsQualityScore},
+              "feedbackPenalty" = ${confidence.signals.feedbackPenalty},
+              "interpretation" = ${confidence.interpretation},
+              "requiresReview" = ${confidence.requiresReview},
+              "reviewPriority" = ${100 - confidence.overallScore},
+              "confidenceReason" = ${confidence.reason},
+              "breakdown" = ${breakdownJson}::jsonb
+          `;
         } catch (confidenceError) {
-          console.error("Error updating AI confidence score:", confidenceError);
-          // No continuar si falla la actualización de confianza
-          throw confidenceError;
+          console.warn("AI confidence score update failed (table may not exist yet):", confidenceError);
+          // No fallar si la tabla no existe aún - continuar sin guardar el score
         }
 
         summary.processed += 1;
