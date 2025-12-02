@@ -366,41 +366,46 @@ export async function processEmailsWithAI(
         });
 
         // 2) Upsert de AIConfidenceScore FUERA de la transacción principal
-        await prisma.aIConfidenceScore.upsert({
-          where: { emailId: email.id },
-          create: {
-            emailId: email.id,
-            overallScore: confidence.overallScore,
-            clarityScore: confidence.signals.clarityScore,
-            patternMatchScore: confidence.signals.patternMatchScore,
-            completenessScore: confidence.signals.completenessScore,
-            priorityCoherenceScore: confidence.signals.priorityCoherenceScore,
-            taskValidityScore: confidence.signals.taskValidityScore,
-            tagsQualityScore: confidence.signals.tagsQualityScore,
-            feedbackPenalty: confidence.signals.feedbackPenalty,
-            interpretation: confidence.interpretation,
-            requiresReview: confidence.requiresReview,
-            reviewPriority: 100 - confidence.overallScore,
-            confidenceReason: confidence.reason,
-            breakdown: confidence.signals as unknown as Prisma.InputJsonValue
-
-          },
-          update: {
-            overallScore: confidence.overallScore,
-            clarityScore: confidence.signals.clarityScore,
-            patternMatchScore: confidence.signals.patternMatchScore,
-            completenessScore: confidence.signals.completenessScore,
-            priorityCoherenceScore: confidence.signals.priorityCoherenceScore,
-            taskValidityScore: confidence.signals.taskValidityScore,
-            tagsQualityScore: confidence.signals.tagsQualityScore,
-            feedbackPenalty: confidence.signals.feedbackPenalty,
-            interpretation: confidence.interpretation,
-            requiresReview: confidence.requiresReview,
-            reviewPriority: 100 - confidence.overallScore,
-            confidenceReason: confidence.reason,
-            breakdown: confidence.signals as unknown as Prisma.InputJsonValue
-          },
-        });
+        try {
+          await prisma.aIConfidenceScore.upsert({
+            where: { emailId: email.id },
+            create: {
+              emailId: email.id,
+              overallScore: confidence.overallScore,
+              clarityScore: confidence.signals.clarityScore,
+              patternMatchScore: confidence.signals.patternMatchScore,
+              completenessScore: confidence.signals.completenessScore,
+              priorityCoherenceScore: confidence.signals.priorityCoherenceScore,
+              taskValidityScore: confidence.signals.taskValidityScore,
+              tagsQualityScore: confidence.signals.tagsQualityScore,
+              feedbackPenalty: confidence.signals.feedbackPenalty,
+              interpretation: confidence.interpretation,
+              requiresReview: confidence.requiresReview,
+              reviewPriority: 100 - confidence.overallScore,
+              confidenceReason: confidence.reason,
+              breakdown: confidence.signals as unknown as Prisma.InputJsonValue
+            },
+            update: {
+              overallScore: confidence.overallScore,
+              clarityScore: confidence.signals.clarityScore,
+              patternMatchScore: confidence.signals.patternMatchScore,
+              completenessScore: confidence.signals.completenessScore,
+              priorityCoherenceScore: confidence.signals.priorityCoherenceScore,
+              taskValidityScore: confidence.signals.taskValidityScore,
+              tagsQualityScore: confidence.signals.tagsQualityScore,
+              feedbackPenalty: confidence.signals.feedbackPenalty,
+              interpretation: confidence.interpretation,
+              requiresReview: confidence.requiresReview,
+              reviewPriority: 100 - confidence.overallScore,
+              confidenceReason: confidence.reason,
+              breakdown: confidence.signals as unknown as Prisma.InputJsonValue
+            },
+          });
+        } catch (confidenceError) {
+          console.error("Error updating AI confidence score:", confidenceError);
+          // No continuar si falla la actualización de confianza
+          throw confidenceError;
+        }
 
         summary.processed += 1;
       } catch (err) {
